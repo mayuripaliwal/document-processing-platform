@@ -5,6 +5,8 @@ from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import User
+from sqlalchemy.exc import IntegrityError
 
 app=FastAPI()
 
@@ -22,14 +24,20 @@ async def signup(user:UserCreate,db:AsyncSession=Depends(get_db)):
     Creates a new account with given email address and password.
     If account already exists for the given email address, returns 409 Conflict
     """
+
     password_hash=await run_in_threadpool(hash_password,user.password)
 
     try:
-        create_user(user.email,password_hash,db)
-    except:
-        #TODO handle exception
-        pass
+        await create_user(user.email,password_hash,db)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists"
+        )
 
+    return {
+        "message":"Account created successfully."
+    }
 
 def hash_password(password:str):
     """
@@ -43,6 +51,15 @@ def hash_password(password:str):
 async def create_user(email:str,password_hash:str,db:AsyncSession):
     """
     Db helper to create a new user with email and password hash.
-    If account already exists, raise exception
+    If account already exists, raises exception and rolls back transaction
     """
-    #TODO implement the helper
+
+    new_user=User(
+        email=email,
+        password_hash=password_hash
+    )
+
+    async with db.begin():
+        db.add(new_user)
+
+    return new_user

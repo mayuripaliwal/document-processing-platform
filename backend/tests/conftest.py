@@ -4,6 +4,9 @@ from app.database import get_db
 from app.main import app
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
+import pytest_asyncio
+from app.models import Document, User
 
 TEST_DATABASE_URL=os.environ["TEST_DATABASE_URL"]
 
@@ -28,3 +31,14 @@ def client():
         yield client
 
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db():
+    """
+    Deletes all rows from Document and Users table after each test
+    """
+    yield
+    async with TestSessionLocal() as db:
+        await db.execute(delete(Document))
+        await db.execute(delete(User))
+        await db.commit()

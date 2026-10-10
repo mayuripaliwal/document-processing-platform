@@ -5,8 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 DATABASE_URL=os.environ["DATABASE_URL"]
+ENVIRONMENT=os.environ["ENVIRONMENT"]
 
-engine=create_async_engine(DATABASE_URL,echo=True)
+IS_PRODUCTION=True if ENVIRONMENT=="production" else False
+
+engine=create_async_engine(DATABASE_URL,echo=False if IS_PRODUCTION else True)
 
 SessionLocal=async_sessionmaker(autocommit=False,autoflush=False,bind=engine)
 

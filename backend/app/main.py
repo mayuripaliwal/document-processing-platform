@@ -1,26 +1,62 @@
-from fastapi import FastAPI, HTTPException, status, Depends, Response
+from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File
 import httpx
 from app.schemas import UserAccount
 from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User
+from app.models import User, DocumentStatus, Document
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from argon2.exceptions import VerifyMismatchError
 import jwt
 import os
 from datetime import datetime,timedelta,timezone
+from jwt import InvalidTokenError, ExpiredSignatureError
+from app.schemas import LocalFileStorage
+from pathlib import Path
 
 JWT_SECRET_KEY=os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM="HS256"
 
-IS_PRODUCTION="production" if os.environ["ENVIRONMENT"]=="production" else False
+IS_PRODUCTION=True if os.environ["ENVIRONMENT"]=="production" else False
+
+FILE_STORAGE_DIR=Path("uploads")
 
 app=FastAPI()
 
 ph=PasswordHasher()
+
+local_storage=LocalFileStorage(FILE_STORAGE_DIR)
+
+async def get_user(request:Request)->int:
+    """
+    - Dependency function for APIs that require authentication
+    - Returns user id from the JWT access token
+    - If no token or token is expired or invalid - raises 401 
+    """
+    jwt_access_token=request.cookies.get("access_token")
+    
+    if jwt_access_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not logged in."
+        )
+    try:
+        payload=await run_in_threadpool(decode_access_token,jwt_access_token)
+        user_id=payload["sub"]
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token expired."
+        )
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token."
+        )
+
+    return int(user_id)   
 
 @app.get('/')
 async def home():
@@ -60,7 +96,7 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
     if user_details is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Email does not exist"
         )
 
     user_id,password_hash=user_details
@@ -70,7 +106,7 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
     if not is_valid_password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid password"
         )
 
     jwt_access_token=await run_in_threadpool(create_access_token,user_id)
@@ -85,6 +121,69 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
 
     return {
         "message":"User logged in successfully."
+    }
+
+@app.post('/documents',status_code=status.HTTP_201_CREATED)
+#TODO add file upload size limit, file type checking
+async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),db=Depends(get_db)):
+    """
+    - Stores the given file for the given user
+    - Returns 401 when user is Unauthorized
+    - Returns 500 when document upload fails
+    """
+    #1. Check if user exists
+    #2. try to save the file
+    #3. if not successful, handle exception
+    #4. if successful, save the document in db
+    #5. if db save is not successful, remove the document from storage and return 500
+    #6. if db save is successful return 201.
+
+    user_exists= await userExists(user_id,db)
+    
+    if not user_exists:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account does not exist."
+        )
+    
+    try:
+        storage_key=await run_in_threadpool(local_storage.save,file.file,file.filename)
+        storage_path=str(local_storage.upload_dir/storage_key)
+    except Exception as save_document_exception:
+        #TODO add logging here
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save document."
+        ) from save_document_exception
+    try:
+        await createDocument(
+            user_id=user_id,
+            file_name=file.filename,
+            stored_file_name=storage_key,
+            mime_type="application/pdf",
+            file_size=file.size,
+            storage_path=storage_path,
+            document_status=DocumentStatus.UPLOADED,
+            db=db
+            )
+    except Exception as DocumentInsertException:
+        
+        #if db write is unsuccesful, remove the stored file
+        try:
+            await run_in_threadpool(local_storage.delete, storage_key)
+            
+        except Exception as AttemptDocumentDeleteException:
+            #TODO add logging here later - document delete failed; after failed document insert in db
+            pass
+
+        #TODO: implement logging later to log DocumentInsertException
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save document."
+        ) from DocumentInsertException
+        
+    return {
+        "message":"Document successfuly uploaded."
     }
 
 def verifyPassword(password_hash:str,password:str)->bool:
@@ -138,7 +237,7 @@ async def getUserByEmail(email:str,db:AsyncSession):
 
     return user
 
-def create_access_token(user_id:int):
+def create_access_token(user_id:int)->str:
     """
     JWT encodes a given user_id and returns a JWT access token with expiry time of 15 minutes
     """
@@ -150,3 +249,53 @@ def create_access_token(user_id:int):
     }
 
     return jwt.encode(payload=payload,key=JWT_SECRET_KEY,algorithm=JWT_ALGORITHM)
+
+def decode_access_token(token:str)->dict:
+    """
+    Decodes a JWT access token and returns the payload {"sub":sub,"exp":exp}
+    """
+    return jwt.decode(jwt=token,key=JWT_SECRET_KEY,algorithms=[JWT_ALGORITHM])
+
+async def userExists(user_id:int,db:AsyncSession)->bool:
+    """
+    - Db helper which returns true when a User ID exists in Users
+    """
+    result=await db.execute(
+        select(User.id).where(User.id==user_id)
+    )
+
+    user_id=result.scalar_one_or_none()
+
+    if user_id is None:
+        return False
+
+    return True
+
+async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_type:str,
+    file_size:int,storage_path:str,document_status:DocumentStatus,db:AsyncSession)->Document:
+    """
+    - Returns newly created document
+    - Creates a document in Documents
+    - If unsuccessful, transaction is rolled back and any exceptions are raised
+
+    """
+    new_document=Document(
+        user_id=user_id,
+        file_name=file_name,
+        stored_file_name=stored_file_name,
+        mime_type=mime_type,
+        file_size=file_size,
+        storage_path=storage_path,
+        document_status=document_status
+    )
+
+    
+    db.add(new_document)
+    try:
+        await db.commit()
+        await db.refresh(new_document)
+    except Exception:
+        await db.rollback()
+        raise 
+
+    return new_document

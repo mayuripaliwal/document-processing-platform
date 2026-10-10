@@ -10,7 +10,7 @@ from app.models import Document, User
 
 TEST_DATABASE_URL=os.environ["TEST_DATABASE_URL"]
 
-test_engine=create_async_engine(TEST_DATABASE_URL,echo=True)
+test_engine=create_async_engine(TEST_DATABASE_URL,echo=False)
 
 
 TestSessionLocal=async_sessionmaker(bind=test_engine,autoflush=False)

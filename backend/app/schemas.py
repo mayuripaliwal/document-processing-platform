@@ -52,7 +52,9 @@ class LocalFileStorage():
     
     def delete(self, storage_key:str)->None:
         """
-        Deletes a stored file using its storage key
+        - Deletes a stored file using its storage key
+        - If storage_key is invalid, raises Value Error
+        - No exception is raised if file does not exist but storage_key is valid
         """
 
         if not storage_key or Path(storage_key).name!=storage_key:

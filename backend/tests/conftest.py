@@ -4,7 +4,7 @@ from app.database import get_db
 from app.main import app
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 import pytest_asyncio
 from app.models import Document, User
 
@@ -35,10 +35,10 @@ def client():
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_db():
     """
-    Deletes all rows from Document and Users table after each test
+    - Deletes all rows from Document and Users table after each test.
+    - After deletion, rows start from id=1
     """
     yield
     async with TestSessionLocal() as db:
-        await db.execute(delete(Document))
-        await db.execute(delete(User))
+        await db.execute(text("TRUNCATE TABLE documents, users RESTART IDENTITY CASCADE"))
         await db.commit()

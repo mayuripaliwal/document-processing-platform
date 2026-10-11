@@ -16,6 +16,7 @@ class DocumentStatus(Enum):
 class Document(Base):
     """
     Schema for defining a document object
+    {`id`, `user_id`, `file_name`, `stored_file_name`, `mime_type`, `file_size`, `storage_path`, `document_status`, `created_at`}
     """
     __tablename__="documents"
 

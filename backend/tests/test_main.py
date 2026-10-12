@@ -78,6 +78,7 @@ def test_post_document(client, tmp_path, monkeypatch):
     """
     - Test document upload is successful - 201
     - Test unauthenticated document upload fails with - 401
+    - Test invalid document type, name and size fails with - 415/400/413
     """
     monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
     pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
@@ -107,6 +108,39 @@ def test_post_document(client, tmp_path, monkeypatch):
     assert len(saved_files)==1
 
     assert saved_files[0].read_bytes()==pdf_content
+
+    #Test invalid file name
+
+    response=client.post('/documents',files={
+        "file":("example/path.pdf",pdf_content,"application/pdf")
+    })
+
+    assert response.status_code==400
+
+    #Test invalid file size
+
+    local_file_storage=LocalFileStorage(tmp_path)
+
+    large_pdf_content=b"a"*(local_file_storage.getMaxFileSize()+1)
+    
+    response=client.post('/documents',files={
+        "file":("example.pdf",large_pdf_content,"application/pdf")
+    })
+
+    assert response.status_code==413
+
+    #Test invalid file type
+    
+    response=client.post('/documents',files={
+        "file":("example.pdf",pdf_content,"application/xml")
+    })
+
+    assert response.status_code==415
+
+    saved_files=list(tmp_path.iterdir())
+
+    assert len(saved_files)==1
+
 
 def test_failed_post_document(client, tmp_path, monkeypatch):
     """

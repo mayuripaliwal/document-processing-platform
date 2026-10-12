@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File
 import httpx
-from app.schemas import UserAccount
+from app.schemas import FileTooLargeError, InvalidFileNameError, UserAccount
 from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
 from app.database import get_db
@@ -130,13 +130,29 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
     - Stores the given file for the given user
     - Returns 401 when user is Unauthorized
     - Returns 500 when document upload fails
+    - Returns 413 when file size exceeds maximum size of 10 MiB
+    - Returns 415 when file type is not PDF
+    - Returns 400 when file name is invalid
     """
-    #1. Check if user exists
-    #2. try to save the file
-    #3. if not successful, handle exception
-    #4. if successful, save the document in db
-    #5. if db save is not successful, remove the document from storage and return 500
-    #6. if db save is successful return 201.
+    #1. Check file size and file type
+    #2. Check if user exists
+    #3. try to save the file
+    #4. if not successful, handle exception
+    #5. if successful, save the document in db
+    #6. if db save is not successful, remove the document from storage and return 500
+    #7. if db save is successful return 201.
+
+    if not local_storage.isValidFileSize(file):
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="File exceeds the maximum allowed size of 10 MiB."
+        )
+
+    if not local_storage.isValidFileType(file):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Please upload a valid PDF file."
+        )
 
     user_exists= await userExists(user_id,db)
     
@@ -149,6 +165,16 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
     try:
         storage_key=await run_in_threadpool(local_storage.save,file.file,file.filename)
         storage_path=str(local_storage.upload_dir/storage_key)
+    except FileTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="File exceeds the maximum allowed size of 10 MiB."
+        )
+    except InvalidFileNameError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename."
+        )
     except Exception as save_document_exception:
         #TODO add logging here
         raise HTTPException(

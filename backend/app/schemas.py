@@ -24,7 +24,8 @@ class InvalidFileNameError(Exception):
     pass
 class LocalFileStorage():
     """
-    Supports save method to upload a document to local storage
+    - Supports save method to upload a document to local storage
+    - Supports delete method to delete a document from local storage
     """
     def __init__(self, upload_dir: Path):
         self.upload_dir=upload_dir.resolve()

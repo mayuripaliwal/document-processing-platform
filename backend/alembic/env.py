@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.database import Base
-from app.models import User, Document, DocumentStatus
+from app.models import User, Document
 import os
 from dotenv import load_dotenv
 

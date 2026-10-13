@@ -5,7 +5,7 @@ from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User, DocumentStatus, Document
+from app.models import User, Document
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, delete
 from argon2.exceptions import VerifyMismatchError
@@ -189,7 +189,6 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
             mime_type="application/pdf",
             file_size=file.size,
             storage_path=storage_path,
-            document_status=DocumentStatus.UPLOADED,
             db=db
             )
     except Exception as DocumentInsertException:
@@ -207,6 +206,8 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save document."
         ) from DocumentInsertException
+
+    #TODO call background worker to process document file for text extraction and chunking
         
     return {
         "message":"Document successfuly uploaded."
@@ -371,7 +372,7 @@ async def userExists(user_id:int,db:AsyncSession)->bool:
     return True
 
 async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_type:str,
-    file_size:int,storage_path:str,document_status:DocumentStatus,db:AsyncSession)->Document:
+    file_size:int,storage_path:str,db:AsyncSession)->Document:
     """
     - Returns newly created document
     - Creates a document in Documents
@@ -384,8 +385,7 @@ async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_ty
         stored_file_name=stored_file_name,
         mime_type=mime_type,
         file_size=file_size,
-        storage_path=storage_path,
-        document_status=document_status
+        storage_path=storage_path
     )
 
     

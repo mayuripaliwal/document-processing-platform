@@ -4,9 +4,17 @@ from pathlib import Path
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 import asyncio
+import sys
 
-REDIS_SETTINGS=RedisSettings()
+if sys.platform=="win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+REDIS_SETTINGS=RedisSettings(
+    host="127.0.0.1",
+    port=6379
+)
 
 async def extract_document_storage_path(document_id:int)->Path | None:
     """
@@ -34,7 +42,7 @@ async def save_document_text(document_id:int, extracted_text:str):
     - Stores extracted text in documents
     """
     async with SessionLocal() as db:
-        await db.execute(update(Document).where(Document.id==document_id).values(extracted_text=extracted_text))
+        await db.execute(update(Document).where(Document.id==document_id, Document.extracted_text.is_(None)).values(extracted_text=extracted_text))
 
         await db.commit()
 
@@ -65,20 +73,22 @@ async def save_document_chunks(document_id:int,chunks:list[str]):
     document_chunks=[]
     for i,chunk in enumerate(chunks):
         document_chunks.append(
-            DocumentChunk(
-                document_id=document_id,
-                chunk_index=i,
-                content=chunk
-            )
+            {
+                "document_id":document_id,
+                "chunk_index":i,
+                "content":chunk
+            }
         )
 
 
     async with SessionLocal() as db:
-        db.add_all(document_chunks)
+
+        await db.execute(insert(DocumentChunk).values(document_chunks).
+        on_conflict_do_nothing(index_elements=["document_id","chunk_index"]))
 
         await db.commit()
 
-async def process_document(document_id:int):
+async def process_document(ctx,document_id:int):
     """
     - Extracts document text from the document for a given document_id
     - Stores the extracted_text in documents table
@@ -99,10 +109,10 @@ async def process_document(document_id:int):
 
     await save_document_chunks(document_id,chunks)
 
-async def startup():
+async def startup(ctx):
     pass
 
-async def shutdown():
+async def shutdown(ctx):
     pass
 
 class WorkerSettings:

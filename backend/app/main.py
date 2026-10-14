@@ -15,6 +15,13 @@ from datetime import datetime,timedelta,timezone
 from jwt import InvalidTokenError, ExpiredSignatureError
 from app.schemas import LocalFileStorage
 from pathlib import Path
+from contextlib import asynccontextmanager
+from arq.connections import create_pool, RedisSettings
+
+REDIS_SETTINGS=RedisSettings(
+    host="127.0.0.1",
+    port=6379
+)
 
 JWT_SECRET_KEY=os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM="HS256"
@@ -23,7 +30,17 @@ IS_PRODUCTION=True if os.environ["ENVIRONMENT"]=="production" else False
 
 FILE_STORAGE_DIR=Path("uploads")
 
-app=FastAPI()
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    redis_pool=await create_pool(REDIS_SETTINGS)
+    app.state.arq_pool=redis_pool
+
+    try:
+        yield
+    finally:
+        await redis_pool.close()
+
+app=FastAPI(lifespan=lifespan)
 
 ph=PasswordHasher()
 
@@ -125,7 +142,7 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
 
 @app.post('/documents',status_code=status.HTTP_201_CREATED)
 #TODO add file upload size limit, file type checking
-async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),db=Depends(get_db)):
+async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=Depends(get_user),db=Depends(get_db)):
     """
     - Stores the given file for the given user
     - Returns 401 when user is Unauthorized
@@ -182,7 +199,7 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
             detail="Failed to save document."
         ) from save_document_exception
     try:
-        await createDocument(
+        document_id=await createDocument(
             user_id=user_id,
             file_name=file.filename,
             stored_file_name=storage_key,
@@ -207,8 +224,7 @@ async def postDocument(file:UploadFile= File(...),user_id:int=Depends(get_user),
             detail="Failed to save document."
         ) from DocumentInsertException
 
-    #TODO call background worker to process document file for text extraction and chunking
-        
+    await request.app.state.arq_pool.enqueue_job("process_document",document_id)
     return {
         "message":"Document successfuly uploaded."
     }
@@ -372,9 +388,9 @@ async def userExists(user_id:int,db:AsyncSession)->bool:
     return True
 
 async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_type:str,
-    file_size:int,storage_path:str,db:AsyncSession)->Document:
+    file_size:int,storage_path:str,db:AsyncSession)->int:
     """
-    - Returns newly created document
+    - Returns newly created document_id
     - Creates a document in Documents
     - If unsuccessful, transaction is rolled back and any exceptions are raised
 
@@ -391,12 +407,13 @@ async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_ty
     
     db.add(new_document)
     try:
+        await db.flush()
+        document_id=new_document.id
         await db.commit()
+        return document_id
     except Exception:
         await db.rollback()
         raise 
-
-    return new_document
 
 async def fetchDocuments(user_id:int, db:AsyncSession)->list[dict]:
     """

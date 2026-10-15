@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File, Query
 import httpx
 from app.schemas import FileTooLargeError, InvalidFileNameError, UserAccount
 from argon2 import PasswordHasher
@@ -46,11 +46,11 @@ ph=PasswordHasher()
 
 local_storage=LocalFileStorage(FILE_STORAGE_DIR)
 
-async def get_user(request:Request)->int:
+async def get_user(request:Request,db:AsyncSession=Depends(get_db))->int:
     """
     - Dependency function for APIs that require authentication
-    - Returns user id from the JWT access token
-    - If no token or token is expired or invalid - raises 401 
+    - Verifies that the user is authenticated
+    - If no token or token is expired or invalid or user id not found in db - raises 401 
     """
     jwt_access_token=request.cookies.get("access_token")
     
@@ -73,7 +73,17 @@ async def get_user(request:Request)->int:
             detail="Invalid access token."
         )
 
-    return int(user_id)   
+    user_id=int(user_id)
+
+    user_exists= await userExists(user_id,db)
+        
+    if not user_exists:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account does not exist."
+        )
+
+    return user_id
 
 @app.get('/')
 async def home():
@@ -152,12 +162,11 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
     - Returns 400 when file name is invalid
     """
     #1. Check file size and file type
-    #2. Check if user exists
-    #3. try to save the file
-    #4. if not successful, handle exception
-    #5. if successful, save the document in db
-    #6. if db save is not successful, remove the document from storage and return 500
-    #7. if db save is successful return 201.
+    #2. try to save the file
+    #3. if not successful, handle exception
+    #4. if successful, save the document in db
+    #5. if db save is not successful, remove the document from storage and return 500
+    #6. if db save is successful return 201.
 
     if not local_storage.isValidFileSize(file):
         raise HTTPException(
@@ -169,14 +178,6 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Please upload a valid PDF file."
-        )
-
-    user_exists= await userExists(user_id,db)
-    
-    if not user_exists:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account does not exist."
         )
     
     try:
@@ -236,13 +237,6 @@ async def getDocuments(user_id:int=Depends(get_user),db=Depends(get_db)):
     - If none, returns empty list
     - If invalid user, returns 401
     """
-    # Verify user
-    user_exists=await userExists(user_id,db)
-    if not user_exists:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account does not exist."
-        )
     # fetch user's documents
     # fetch documents should return empty list when no documents found
     # else return documents
@@ -300,7 +294,6 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
             detail="Document not found."
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-    
 
 def verifyPassword(password_hash:str,password:str)->bool:
     """
@@ -376,16 +369,14 @@ async def userExists(user_id:int,db:AsyncSession)->bool:
     """
     - Db helper which returns true when a User ID exists in Users
     """
+    
     result=await db.execute(
         select(User.id).where(User.id==user_id)
     )
 
-    user_id=result.scalar_one_or_none()
+    existing_user_id=result.scalar_one_or_none()
 
-    if user_id is None:
-        return False
-
-    return True
+    return existing_user_id is not None
 
 async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_type:str,
     file_size:int,storage_path:str,db:AsyncSession)->int:

@@ -7,7 +7,7 @@ from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Document
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, text
 from argon2.exceptions import VerifyMismatchError
 import jwt
 import os
@@ -17,6 +17,7 @@ from app.schemas import LocalFileStorage
 from pathlib import Path
 from contextlib import asynccontextmanager
 from arq.connections import create_pool, RedisSettings
+import time
 
 REDIS_SETTINGS=RedisSettings(
     host="127.0.0.1",
@@ -40,7 +41,10 @@ async def lifespan(app:FastAPI):
     finally:
         await redis_pool.close()
 
-app=FastAPI(lifespan=lifespan)
+app=FastAPI(
+    lifespan=lifespan,
+    swagger_ui_parameters={"tryItOutEnabled":True}
+)
 
 ph=PasswordHasher()
 
@@ -295,6 +299,28 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.get("/search")
+async def search_documents(query:str=Query(min_length=1,max_length=200),user_id:int=Depends(get_user),db:AsyncSession=Depends(get_db)):
+    """
+    - Returns ranked documents of the user whose contents match search query 
+    - Returns 422 when search query is empty
+    - Returns 401 when unauthenticated
+    """
+    query=query.strip()
+
+    if not query:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Search query cannot be empty."
+        )
+
+    search_results=await getSearchResults(query, user_id, db)
+    
+
+    return {
+        "results":search_results
+    }
+
 def verifyPassword(password_hash:str,password:str)->bool:
     """
     Verify a password against a stored password hash
@@ -451,3 +477,44 @@ async def deleteDocumentByID(document_id:int, user_id:int, db:AsyncSession)->boo
     except Exception:
         await db.rollback()
         raise
+
+async def getSearchResults(query:str, user_id:int, db)->list[dict]:
+    """
+    DB helper to get relevant documents based on search query
+    """
+
+    result=await db.execute(
+        text(
+            """
+            SELECT id as document_id, file_name, created_at, extracted_text 
+            FROM documents
+            WHERE user_id=:user_id 
+            AND extracted_text is NOT NULL 
+            AND to_tsvector('english', extracted_text) 
+            @@ websearch_to_tsquery('english', :query) 
+            ORDER BY 
+            ts_rank(
+                to_tsvector('english', extracted_text),
+                websearch_to_tsquery('english', :query)
+            ) DESC, 
+            created_at DESC 
+            LIMIT 10
+            """
+        ),{
+            "user_id":user_id,
+            "query":query
+        }
+    )
+
+    search_results=[]
+
+    for document_id,file_name,created_at,extracted_text in result:
+        search_results.append({
+            "document_id":document_id,
+            "file_name":file_name,
+            "created_at":created_at,
+            "extracted_text":extracted_text
+            }
+        )
+
+    return search_results

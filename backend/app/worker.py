@@ -30,11 +30,17 @@ async def extract_document_storage_path(document_id:int)->Path | None:
         
         return Path(storage_path)
 
-def extract_text(file:Path)->str:
+def extract_text(file:Path)->str|None:
     """
     Returns extracted text from the given PDF file
     """
     text=pymupdf4llm.to_markdown(file)
+
+    text=text.strip()
+
+    if text =="":
+        return None
+
     return text
 
 async def save_document_text(document_id:int, extracted_text:str):
@@ -102,6 +108,9 @@ async def process_document(ctx,document_id:int):
         return
 
     extracted_text=await asyncio.to_thread(extract_text,storage_path)
+
+    if extracted_text is None:
+        return
 
     await save_document_text(document_id, extracted_text)
 

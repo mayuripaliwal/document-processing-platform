@@ -3,6 +3,7 @@ from sqlalchemy import BigInteger, ForeignKey, String, Text, DateTime, func, Enu
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from enum import Enum
+from pgvector.sqlalchemy import Vector
 
 class Document(Base):
     """
@@ -12,7 +13,7 @@ class Document(Base):
     __tablename__="documents"
 
     id:Mapped[int]=mapped_column(BigInteger,primary_key=True,autoincrement=True)
-    user_id:Mapped[int]=mapped_column(BigInteger,ForeignKey("users.id"),nullable=False)
+    user_id:Mapped[int]=mapped_column(BigInteger,ForeignKey("users.id", ondelete="CASCADE"),nullable=False)
     file_name:Mapped[str]=mapped_column(String(255),nullable=False)
     stored_file_name:Mapped[str]=mapped_column(String(255),nullable=False, unique=True)
     mime_type:Mapped[str]=mapped_column(String(100),nullable=False)
@@ -48,6 +49,7 @@ class DocumentChunk(Base):
     )
 
     id:Mapped[int]=mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    document_id:Mapped[int]=mapped_column(BigInteger, ForeignKey("documents.id"),nullable=False)
+    document_id:Mapped[int]=mapped_column(BigInteger, ForeignKey("documents.id", ondelete="CASCADE"),nullable=False)
     chunk_index:Mapped[int]=mapped_column(Integer, nullable=False)
     content:Mapped[str]=mapped_column(Text, nullable=False)
+    embedding:Mapped[list[float]]=mapped_column(Vector(384), nullable=True)

@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 import asyncio
 import sys
+from app.embeddings import load_embedding_model
 
 if sys.platform=="win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -71,25 +72,26 @@ def chunk_text(text:str)->list[str]:
 
     return chunks
 
-async def save_document_chunks(document_id:int,chunks:list[str]):
+async def save_document_chunk_details(document_id:int,chunks:list[str], embeddings:list[list[float]]):
     """
-    Stores document chunks of a given document id in document_chunks
+    Stores document chunk details[chunk, embedding] of a given document id in document_chunks
     """
 
-    document_chunks=[]
-    for i,chunk in enumerate(chunks):
-        document_chunks.append(
+    document_chunk_details=[]
+    for chunk_index, (chunk,embedding) in enumerate(zip(chunks, embeddings)):
+        document_chunk_details.append(
             {
                 "document_id":document_id,
-                "chunk_index":i,
-                "content":chunk
+                "chunk_index":chunk_index,
+                "content":chunk,
+                "embedding":embedding
             }
         )
 
 
     async with SessionLocal() as db:
 
-        await db.execute(insert(DocumentChunk).values(document_chunks).
+        await db.execute(insert(DocumentChunk).values(document_chunk_details).
         on_conflict_do_nothing(index_elements=["document_id","chunk_index"]))
 
         await db.commit()
@@ -114,12 +116,18 @@ async def process_document(ctx,document_id:int):
 
     await save_document_text(document_id, extracted_text)
 
+    #store chunks and their embeddings
+    
     chunks=await asyncio.to_thread(chunk_text,extracted_text)
 
-    await save_document_chunks(document_id,chunks)
+    model=ctx["embedding_model"]
+
+    embeddings=await asyncio.to_thread(model.encode, chunks)
+
+    await save_document_chunk_details(document_id,chunks, embeddings.tolist())
 
 async def startup(ctx):
-    pass
+    ctx["embedding_model"]=load_embedding_model()
 
 async def shutdown(ctx):
     pass

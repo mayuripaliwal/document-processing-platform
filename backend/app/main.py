@@ -18,6 +18,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from arq.connections import create_pool, RedisSettings
 import time
+from app.embeddings import load_embedding_model
 
 REDIS_SETTINGS=RedisSettings(
     host="127.0.0.1",
@@ -37,6 +38,7 @@ async def lifespan(app:FastAPI):
     app.state.arq_pool=redis_pool
 
     try:
+        app.state.embedding_model=await run_in_threadpool(load_embedding_model)
         yield
     finally:
         await redis_pool.close()
@@ -300,7 +302,7 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.get("/search")
-async def search_documents(query:str=Query(min_length=1,max_length=200),user_id:int=Depends(get_user),db:AsyncSession=Depends(get_db)):
+async def search_documents(request:Request, query:str=Query(min_length=1,max_length=200),user_id:int=Depends(get_user),db:AsyncSession=Depends(get_db)):
     """
     - Returns ranked documents of the user whose contents match search query 
     - Returns 422 when search query is empty
@@ -313,8 +315,8 @@ async def search_documents(query:str=Query(min_length=1,max_length=200),user_id:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Search query cannot be empty."
         )
-
-    search_results=await getSearchResults(query, user_id, db)
+    model=request.app.state.embedding_model
+    search_results=await getSearchResults(query, user_id, model,db)
     
 
     return {
@@ -474,47 +476,59 @@ async def deleteDocumentByID(document_id:int, user_id:int, db:AsyncSession)->boo
 
         await db.commit()
         return True
-    except Exception:
+    except Exception as e:
         await db.rollback()
         raise
 
-async def getSearchResults(query:str, user_id:int, db)->list[dict]:
+async def getSearchResults(query:str, user_id:int, model, db)->list[dict]:
     """
     DB helper to get relevant documents based on search query
     """
+    query_embedding=await run_in_threadpool(model.encode, query)
+
+    query_embedding=query_embedding.tolist()
 
     result=await db.execute(
         text(
             """
-            SELECT id as document_id, file_name, created_at, extracted_text 
-            FROM documents
-            WHERE user_id=:user_id 
-            AND extracted_text is NOT NULL 
-            AND to_tsvector('english', extracted_text) 
-            @@ websearch_to_tsquery('english', :query) 
-            ORDER BY 
-            ts_rank(
-                to_tsvector('english', extracted_text),
-                websearch_to_tsquery('english', :query)
-            ) DESC, 
-            created_at DESC 
+            SELECT d.id as document_id,
+            d.file_name,
+            d.created_at, 
+            dc.id as chunk_id,
+            dc.content,
+            dc.embedding <=>  CAST(:query_embedding as vector) as cosine_distance
+            FROM document_chunks as dc
+            JOIN documents as d
+            ON d.id=dc.document_id
+            WHERE d.user_id=:user_id 
+            AND dc.embedding is NOT NULL 
+            ORDER BY dc.embedding <=>  CAST(:query_embedding as vector) ASC
             LIMIT 10
             """
         ),{
             "user_id":user_id,
-            "query":query
+            "query_embedding":query_embedding
         }
     )
 
     search_results=[]
 
-    for document_id,file_name,created_at,extracted_text in result:
+    for document_id,file_name,created_at,chunk_id, content, cosine_distance in result:
         search_results.append({
             "document_id":document_id,
             "file_name":file_name,
             "created_at":created_at,
-            "extracted_text":extracted_text
+            "chunk_id":chunk_id,
+            "content":content,
+            "cosine_distance":cosine_distance
             }
         )
 
     return search_results
+
+async def generate_answer(query, search_results):
+    # TODO: 1. Prepare the top five retrieved chunks
+    # TODO: 2. Construct the system prompt and context
+    # TODO: 3. Call Groq with structured output
+    # TODO: 4. Return the answer and citations
+    ...

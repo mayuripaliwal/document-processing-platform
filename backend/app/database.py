@@ -9,7 +9,7 @@ ENVIRONMENT=os.environ["ENVIRONMENT"]
 
 IS_PRODUCTION=True if ENVIRONMENT=="production" else False
 
-engine=create_async_engine(DATABASE_URL,echo=False if IS_PRODUCTION else True)
+engine=create_async_engine(DATABASE_URL,echo=False)
 
 SessionLocal=async_sessionmaker(autocommit=False,autoflush=False,bind=engine)
 

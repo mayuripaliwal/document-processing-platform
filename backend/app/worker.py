@@ -101,7 +101,7 @@ async def process_document(ctx,document_id:int):
     - Extracts document text from the document for a given document_id
     - Stores the extracted_text in documents table
     - Stores its text chunks in document_chunks table
-    """
+    """    
     storage_path=await extract_document_storage_path(document_id)
 
     if storage_path is None:

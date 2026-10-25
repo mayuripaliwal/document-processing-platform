@@ -221,3 +221,4 @@ __marimo__/
 
 /backend/uploads
 /sample_data
+/backend/tests/test_llm.py

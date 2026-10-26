@@ -21,6 +21,11 @@ import time
 from app.embeddings import load_embedding_model
 from groq import AsyncGroq
 import json
+import logging
+from fastapi.middleware.cors import CORSMiddleware
+
+logger=logging.getLogger(__name__)
+logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
 
 REDIS_SETTINGS=RedisSettings(
     host="127.0.0.1",
@@ -36,6 +41,8 @@ FILE_STORAGE_DIR=Path("uploads")
 
 GROQ_API_KEY=os.environ["GROQ_API_KEY"]
 GROQ_MODEL=os.environ["GROQ_MODEL"]
+
+FRONTEND_URL=os.environ["FRONTEND_URL"]
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -53,6 +60,14 @@ async def lifespan(app:FastAPI):
 app=FastAPI(
     lifespan=lifespan,
     swagger_ui_parameters={"tryItOutEnabled":True}
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["GET","POST","OPTIONS","DELETE"],
+    allow_headers=["Content-Type"]
 )
 
 ph=PasswordHasher()
@@ -104,6 +119,12 @@ async def home():
         "message":"Backend is working"
     }
 
+@app.get('/auth')
+async def auth(user_id:int=Depends(get_user)):
+    return {
+        "message":"User is logged in"
+    }
+
 @app.post('/signup', status_code=status.HTTP_201_CREATED)
 async def signup(user:UserAccount,db:AsyncSession=Depends(get_db)):
     """
@@ -130,12 +151,14 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
     """
     - Authenticate user with password verification
     - Stores JWT access token in http-Only Cookie
+    - Returns `HTTP_404_NOT_FOUND` when account does not exist
+    - Returns `HTTP_401_UNAUTHORIZED` when invalid password
     """
     user_details=await getUserByEmail(user.email,db)
 
     if user_details is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Email does not exist"
         )
 
@@ -161,6 +184,13 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
 
     return {
         "message":"User logged in successfully."
+    }
+
+@app.post('/logout')
+async def logout(response:Response, user_id:int=Depends(get_user)):
+    response.delete_cookie(key="access_token")
+    return {
+        "message":"Successfully logged out."
     }
 
 @app.post('/documents',status_code=status.HTTP_201_CREATED)
@@ -207,7 +237,7 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
             detail="Invalid filename."
         )
     except Exception as save_document_exception:
-        #TODO add logging here
+        logger.exception("Failed to save document file: %s in storage.", file.filename)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save document."
@@ -223,16 +253,14 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
             db=db
             )
     except Exception as DocumentInsertException:
-        
+        logger.exception("Failed to insert document: %s in DB", file.filename)
         #if db write is unsuccesful, remove the stored file
         try:
             await run_in_threadpool(local_storage.delete, storage_key)
             
         except Exception as AttemptDocumentDeleteException:
-            #TODO add logging here later - document delete failed; after failed document insert in db
-            pass
+            logger.exception("Failed to delete document file: %s from storage after failed document insert.", file.filename)
 
-        #TODO: implement logging later to log DocumentInsertException
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save document."
@@ -240,14 +268,14 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
 
     try:
         await request.app.state.arq_pool.enqueue_job("process_document",document_id)
-    except Exception as e:
-        #TODO add logging later
-        print(e)
+    except Exception:
+        logger.exception("Failed to enqueue process_document job for document_id: %s", document_id)
     return {
         "message":"Document successfuly uploaded."
     }
 
 @app.get('/documents',status_code=status.HTTP_200_OK)
+#TODO: add pagination later
 async def getDocuments(user_id:int=Depends(get_user),db=Depends(get_db)):
     """
     - Fetches all documents for a given user ID
@@ -290,7 +318,7 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
     try:
         await run_in_threadpool(local_storage.delete,storage_key)
     except (ValueError, OSError) as Value_OS_ERROR:
-        #TODO: add logging here later
+        logger.exception("Failed to delete document file with storage_key: %s", storage_key)
         # case when file couldnt be deleted
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -299,7 +327,7 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
     try:
         is_deleted=await deleteDocumentByID(document_id, user_id, db)
     except Exception as exc:
-        #TODO: add logging here later
+        logger.exception("Failed to delete document_id: %s from DB after file already deleted from storage", document_id)
         # case when file already deleted, but its meta data remains in db
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -458,10 +486,10 @@ async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_ty
 
 async def fetchDocuments(user_id:int, db:AsyncSession)->list[dict]:
     """
-    Returns {`id`,`file_name`, `file_size`, `created_at`} for each document belonging to a given user_id
+    Returns {`id`,`file_name`, `file_size_bytes`, `created_at`} for each document belonging to a given user_id
     """
     result=await db.execute(
-        select(Document.id, Document.file_name,Document.file_size,Document.created_at)
+        select(Document.id, Document.file_name,Document.file_size.label("file_size_bytes") ,Document.created_at)
         .where(Document.user_id==user_id)
         .order_by(Document.created_at.desc())
     )
@@ -629,6 +657,6 @@ async def generate_answer(query:str, search_results:list[dict[str, int | str]], 
         answer=json.loads(answer)
         
         return answer
-    except Exception as e:
-        #TODO add logging later
+    except Exception:
+        logger.exception("Failed to get llm response.")
         return None

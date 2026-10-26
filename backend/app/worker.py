@@ -8,6 +8,9 @@ from sqlalchemy.dialects.postgresql import insert
 import asyncio
 import sys
 from app.embeddings import load_embedding_model
+import logging
+
+logger=logging.getLogger(__name__)
 
 if sys.platform=="win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -103,6 +106,7 @@ async def process_document(ctx,document_id:int):
     - Stores its text chunks in document_chunks table
     """    
     storage_path=await extract_document_storage_path(document_id)
+    logger.info("Extracted storage path for document_id: %s", document_id)
 
     if storage_path is None:
         #document does not exist, means it got deleted after it was added 
@@ -114,22 +118,40 @@ async def process_document(ctx,document_id:int):
     if extracted_text is None:
         return
 
+    logger.info("Extracted text for document_id: %s", document_id)
+
     await save_document_text(document_id, extracted_text)
+
+    logger.info("Saved extracted text for document_id: %s", document_id)
 
     #store chunks and their embeddings
     
     chunks=await asyncio.to_thread(chunk_text,extracted_text)
 
+    logger.info("Extracted chunks for document_id: %s", document_id)
+
     model=ctx["embedding_model"]
 
     embeddings=await asyncio.to_thread(model.encode, chunks)
 
+    logger.info("Extracted embeddings for document_id: %s", document_id)
+
     await save_document_chunk_details(document_id,chunks, embeddings.tolist())
 
+    logger.info("Saved chunks and embeddings for document_id: %s", document_id)
+
 async def startup(ctx):
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
+    
+    logger.info("Started ARQ Worker")
+    
     ctx["embedding_model"]=load_embedding_model()
 
+    logger.info("Embedding model loaded")
+    
+    
 async def shutdown(ctx):
+    logger.info("Stopped ARQ Worker")
     pass
 
 class WorkerSettings:

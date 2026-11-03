@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { Dialog, DialogBackdrop, DialogPanel, TransitionChild } from '@headlessui/react'
 import {
   Bars3Icon,
@@ -9,8 +9,9 @@ import {
 import {AUTH_STATUSES} from "./AuthConfig";
 
 const navigation = [
-  { name: 'Dashboard', linkto: '/dashboard', current: true },
-  { name: 'My Documents', linkto: '/documents', current: false }
+  { name: 'Dashboard', linkto: '/dashboard' },
+  { name: 'My Documents', linkto: '/documents'},
+  {name: 'Ask Documents', linkto: 'ask/documents'}
 ]
 
 function classNames(...classes) {
@@ -81,17 +82,17 @@ export default function Sidebar({setAuthStatus}) {
                       <ul role="list" className="-mx-2 space-y-1">
                         {navigation.map((item) => (
                           <li key={item.name}>
-                            <Link
+                            <NavLink
                               to={item.linkto}
-                              className={classNames(
-                                item.current
+                              className={({isActive}) => classNames(
+                                isActive
                                   ? 'bg-gray-50 text-indigo-600'
                                   : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600',
                                 'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold',
                               )}
                             >
                               {item.name}
-                            </Link>
+                            </NavLink>
                           </li>
                         ))}
                       </ul>
@@ -124,17 +125,17 @@ export default function Sidebar({setAuthStatus}) {
                       <ul role="list" className="-mx-2 space-y-1">
                         {navigation.map((item) => (
                           <li key={item.name}>
-                            <Link
+                            <NavLink
                               to={item.linkto}
-                              className={classNames(
-                                item.current
+                              className={({isActive}) => classNames(
+                                isActive
                                   ? 'bg-gray-50 text-indigo-600'
                                   : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600',
                                 'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold',
                               )}
                             >
                               {item.name}
-                            </Link>
+                            </NavLink>
                           </li>
                         ))}
                       </ul>

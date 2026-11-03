@@ -1,1 +1,1 @@
-# document-processing-platform
+# Document Processing Platform

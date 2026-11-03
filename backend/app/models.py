@@ -5,6 +5,14 @@ from datetime import datetime
 from enum import Enum
 from pgvector.sqlalchemy import Vector
 
+class DocumentStatus(Enum):
+    """States -'UPLOADED', 'PROCESSING', 'COMPLETED', 'FAILED'
+    """
+    UPLOADED="UPLOADED"
+    PROCESSING="PROCESSING"
+    COMPLETED="COMPLETED"
+    FAILED="FAILED"
+
 class Document(Base):
     """
     Schema for defining a document object
@@ -21,6 +29,7 @@ class Document(Base):
     storage_path:Mapped[str]=mapped_column(Text, nullable=False)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now(),nullable=False)
     extracted_text:Mapped[str|None]=mapped_column(Text, nullable=True)
+    document_status:Mapped[DocumentStatus]=mapped_column(SQLEnum(DocumentStatus, name="document_status"), nullable=False)
 
 class User(Base):
     """
@@ -36,7 +45,7 @@ class User(Base):
 class DocumentChunk(Base):
     """
     Schema for defining a document chunk
-    {`id`, `document_id`, `chunk_index`, `content`}
+    {`id`, `document_id`, `chunk_index`, `content`, `embedding`, `page_no`}
     """
     __tablename__="document_chunks"
 
@@ -53,3 +62,4 @@ class DocumentChunk(Base):
     chunk_index:Mapped[int]=mapped_column(Integer, nullable=False)
     content:Mapped[str]=mapped_column(Text, nullable=False)
     embedding:Mapped[list[float]]=mapped_column(Vector(384), nullable=True)
+    page_no:Mapped[int]=mapped_column(Integer, nullable=False)

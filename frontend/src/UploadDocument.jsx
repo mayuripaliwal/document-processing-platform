@@ -60,7 +60,8 @@ export default function UploadDocument({setHasNewDocument, setAuthStatus}) {
             setFileUploadErrorMessage("Unable to connect to the server. Please try again.");
         }
         finally{
-            setUploadingDocument(true);
+            setSelectedFile(null);
+            setUploadingDocument(false);
         }
     }
   return (

@@ -33,8 +33,7 @@ export default function Signin({setAuthStatus}) {
 
             if (!response.ok){
                 setAuthStatus(AUTH_STATUSES.LOGGED_OUT);
-                {/**Account already exists */}
-                if (response.status===401){
+                if (response.status===404){
                     setErrorMessage("Account does not exist.");
                 }
                 else if (response.status===422){

@@ -2,6 +2,8 @@ import {useEffect, useState, useCallback} from 'react';
 import {AUTH_STATUSES} from "./AuthConfig";
 import UploadDocument from "./UploadDocument";
 import {TrashIcon} from '@heroicons/react/24/outline';
+import PDFViewer from "./PDFViewer";
+import {Link} from "react-router-dom";
 
 export function formatFileSize(file_size_bytes){
     if (file_size_bytes>=1024*1024){
@@ -189,11 +191,12 @@ export default function Documents({setAuthStatus}){
                     key={document.id}
                     className="grid grid-cols-5 items-center gap-4 py-4 hover:bg-gray-100"
                     >
-                        <span
+                        <Link
+                        to={`/documents/${document.id}`}
                         className="truncate font-medium text-gray-600"
                         >
                             {document.file_name}
-                        </span>
+                        </Link>
                         <span
                         className="text-sm text-gray-600"
                         >

@@ -4,6 +4,8 @@ from typing import BinaryIO
 from uuid import uuid4
 from fastapi import UploadFile
 
+MAX_FILE_SIZE_BYTES=10485760
+MAX_FILE_READ_BYTES=1048576
 class UserAccount(BaseModel):
     """
     A valid user account model with valid email and minimum 8 char length password
@@ -29,20 +31,18 @@ class LocalFileStorage():
     """
     def __init__(self, upload_dir: Path):
         self.upload_dir=upload_dir.resolve()
-        self._MAX_FILE_SIZE_BYTES=10485760
-        self._MAX_FILE_READ_BYTES=1048576
 
     def getMaxFileSize(self)->int:
         """
         Returns max file size that is permissible.
         """
-        return self._MAX_FILE_SIZE_BYTES
+        return MAX_FILE_SIZE_BYTES
 
     def isValidFileSize(self,file:UploadFile)->bool:
         """
         - Returns if a file has a permissible file size
         """
-        return file.size is not None and file.size <= self._MAX_FILE_SIZE_BYTES
+        return file.size is not None and file.size <= MAX_FILE_SIZE_BYTES
 
     def isValidFileType(self,file:UploadFile)->bool:
         """
@@ -74,12 +74,12 @@ class LocalFileStorage():
 
             with destination.open("xb") as output:
                 while True:
-                    chunk=file.read(self._MAX_FILE_READ_BYTES)
+                    chunk=file.read(MAX_FILE_READ_BYTES)
                     
                     if not chunk:
                         break
 
-                    if len(chunk)+file_bytes_read>self._MAX_FILE_SIZE_BYTES:
+                    if len(chunk)+file_bytes_read>MAX_FILE_SIZE_BYTES:
                         raise FileTooLargeError("File exceeds maximum allowed size")
                     
                     file_bytes_read+=len(chunk)
@@ -103,3 +103,20 @@ class LocalFileStorage():
 
         destination=self.upload_dir/storage_key
         destination.unlink(missing_ok=True)
+
+    def get(self, storage_key:str)->BinaryIO | None:
+        """- Returns BinaryIO object from local storage for a given storage_key
+        - Returns None when not found
+        """
+
+        if not storage_key or Path(storage_key).name!=storage_key:
+            raise ValueError("Invalid storage key")
+
+        destination=self.upload_dir/storage_key
+
+        if not destination.is_file():
+            return None
+
+        return destination.open("rb")
+
+

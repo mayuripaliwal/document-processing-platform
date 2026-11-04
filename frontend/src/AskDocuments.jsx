@@ -3,7 +3,7 @@ import {useState} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 
-export default function AskDocuments({setAuthStatus}){
+export default function AskDocuments({setAuthStatus, documentId}){
     const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
     const MAX_QUERY_LENGTH = 200;
     
@@ -19,7 +19,7 @@ export default function AskDocuments({setAuthStatus}){
         event.preventDefault();
         setLoading(true);
         try {
-            const response = await fetch(`${BACKEND_URL}/search?query=${encodeURIComponent(query.trim())}`,{
+            const response = await fetch(`${BACKEND_URL}/documents/${documentId}/search/?query=${encodeURIComponent(query.trim())}`,{
                 method:"GET",
                 credentials:"include",
                 headers:{
@@ -36,6 +36,9 @@ export default function AskDocuments({setAuthStatus}){
                     setSearchError("Ask Documents is unavailable at the moment. Please try again later.")
                     setAnswer(null);
                 }
+                else if (response.status===404){
+                    setSearchError("We could not find what you were looking for.")
+                }
                 else{
                     setSearchError("Something went wrong. Please try again.")
                     setAnswer(null);
@@ -48,6 +51,7 @@ export default function AskDocuments({setAuthStatus}){
             }
         }
         catch(error){
+            console.log(error);
             setSearchError("Unable to connect to the server. Please try again.");
             setAnswer(null);
         }
@@ -127,11 +131,10 @@ export default function AskDocuments({setAuthStatus}){
                         {answer.sources && answer.sources.length > 0 &&(
                             <div className="">
                                 <p>Sources</p>
-                                {answer.sources.map((source, index)=>(
+                                {answer.sources.map((source)=>(
                                     <span
-                                    key={`${source.document_id}-${source.page_no}-${index}`}
                                     className="mt-4 rounded-lg p-4"
-                                    >Document {source.document_id}, page no.: {source.page_no}</span>
+                                    >Page no.: {source}</span>
                                 ))}
                             </div>
                         )}   

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File, Query
 import httpx
-from app.schemas import FileTooLargeError, InvalidFileNameError, UserAccount
+from app.schemas import FileTooLargeError, InvalidFileNameError, UserAccount, MAX_FILE_READ_BYTES
 from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
 from app.database import get_db
@@ -23,6 +23,7 @@ from groq import AsyncGroq
 import json
 import logging
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 logger=logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
@@ -344,12 +345,13 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.get("/search", status_code=status.HTTP_200_OK)
-async def search_documents(request:Request, query:str=Query(min_length=1,max_length=200),user_id:int=Depends(get_user),db:AsyncSession=Depends(get_db)):
+@app.get("/documents/{document_id}/search", status_code=status.HTTP_200_OK)
+async def search_documents(request:Request,document_id:int, query:str=Query(min_length=1,max_length=200), user_id:int=Depends(get_user),db:AsyncSession=Depends(get_db)):
     """
     - Returns answer to user query.
     - Returns 422 when search query is empty.
     - Returns 401 when unauthenticated.
+    - Returns 404 when resource not found.
     - Returns `HTTP_503_SERVICE_UNAVAILABLE` when search service is not available.
     """
     query=query.strip()
@@ -365,6 +367,7 @@ async def search_documents(request:Request, query:str=Query(min_length=1,max_len
         logger.exception("Failed to load embedding model")
     answer=await getSearchAnswer(
         query=query, 
+        document_id=document_id,
         user_id=user_id, 
         embedding_model=embedding_model,
         groq_client=request.app.state.groq_client,
@@ -376,11 +379,47 @@ async def search_documents(request:Request, query:str=Query(min_length=1,max_len
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service unavailable at the momemt."
         )
+
+    if len(answer)==0:
+        print(answer)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested resource could not be found."
+        )
     
     return {
         "answer":answer["answer"],
         "sources":answer["sources"]
     }
+
+@app.get('/documents/{document_id}/file',status_code=status.HTTP_200_OK)
+async def getDocumentFile(document_id: int, user_id:int=Depends(get_user),db=Depends(get_db)):
+    """
+    - Fetches document object for a given document id and user_id.
+    - If none found, returns 404.
+    """
+    try:
+        document=await fetchDocumentFile(document_id, user_id, db)
+    except ValueError:
+        logger.exception("Invalid storage key for document_id: %s", document_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to retrieve document"
+        )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found."
+        )
+
+    return StreamingResponse(
+        content=read_file(document),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":"inline"
+        }
+    )
 
 def verifyPassword(password_hash:str,password:str)->bool:
     """
@@ -565,7 +604,7 @@ async def deleteDocumentByID(document_id:int, user_id:int, db:AsyncSession)->boo
         await db.rollback()
         raise
 
-async def getSearchAnswer(groq_client, query:str, user_id:int, embedding_model, db):
+async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, embedding_model, db):
     """
     - DB helper to get answer for a search query 
     - Returns None when could not generate an answer
@@ -577,26 +616,31 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, embedding_model, 
     result=await db.execute(
         text(
             """
-            SELECT d.id as document_id,
-            d.file_name,
-            d.created_at, 
+            SELECT
             dc.id as chunk_id,
             dc.content,
-            dc.embedding <=>  CAST(:query_embedding as vector) as cosine_distance,
             dc.page_no
             FROM document_chunks as dc
             JOIN documents as d
             ON d.id=dc.document_id
             WHERE d.user_id=:user_id 
-            AND dc.embedding is NOT NULL 
+            AND d.id=:document_id 
+            AND d.document_status=:status
             ORDER BY dc.embedding <=>  CAST(:query_embedding as vector) ASC
             LIMIT 10
             """
         ),{
             "user_id":user_id,
-            "query_embedding":query_embedding
+            "document_id":document_id,
+            "query_embedding":query_embedding,
+            "status":DocumentStatus.COMPLETED
         }
     )
+
+    result=result.all()
+
+    if not result:
+        return [] # Return empty list to indicate no records found 
 
     search_results_for_llm=[]
 
@@ -604,36 +648,37 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, embedding_model, 
 
     actual_sources=set()
 
-    for document_id, file_name, created_at, chunk_id, content, cosine_distance, page_no in result:
-        source_id=str(chunk_id)+'_'+str(document_id)
+    for chunk_id, content, page_no in result:
         search_results_for_llm.append({
-            "source_id":source_id,
+            "source_id":chunk_id,
             "content":content,
         })
-        actual_sources.add(source_id)
-        source_id_to_page_no_mapping[source_id]=page_no
+        actual_sources.add(chunk_id)
+        source_id_to_page_no_mapping[chunk_id]=page_no
 
     answer=await generate_answer(query, search_results_for_llm, groq_client)
 
     if answer is None:
         return None
 
-    sources_document_id_page_no=[]
+    pages=set()
+
+    doc_pages=[]
 
     for source_id in answer["citations"]:
         if source_id in actual_sources:
-            chunk_id, document_id = source_id.split('_')
-            sources_document_id_page_no.append({
-                    "document_id": int(document_id),
-                    "page_no": source_id_to_page_no_mapping[source_id]
-                })
+            #TODO: add source_id later , when capability to map chunk_id to text in pdf is added
+            pages.add(source_id_to_page_no_mapping[source_id])
         else:
             logger.info("LLM returned an unknown chunk citation: %s", source_id)
             pass
+
+    for page in pages:
+        doc_pages.append(page)
         
     return {
         "answer":answer["answer"],
-        "sources":sources_document_id_page_no,
+        "sources":doc_pages,
     }
 
 async def generate_answer(query:str, search_results:list[dict[str, int | str]], groq_client)->dict | None:
@@ -685,7 +730,7 @@ async def generate_answer(query:str, search_results:list[dict[str, int | str]], 
                             "citations":{
                                 "type":"array",
                                 "items":{
-                                    "type":"string"
+                                    "type":"integer"
                                 }
                             }
                         },
@@ -704,3 +749,35 @@ async def generate_answer(query:str, search_results:list[dict[str, int | str]], 
     except Exception:
         logger.exception("Failed to get llm response.")
         return None
+
+async def fetchDocumentFile(document_id:int, user_id:int, db):
+    """- Fetches document object for given document_id and user_id
+    - Returns None when not found
+    """
+
+    storage_key=await db.execute(text(
+        """SELECT stored_file_name as storage_key 
+        FROM documents 
+        WHERE documents.id=:document_id 
+        AND documents.user_id=:user_id
+        """
+    ),{
+        "document_id":document_id,
+        "user_id":user_id
+    })
+    
+    storage_key=storage_key.scalar_one_or_none()
+
+    # Now fetch the file from storage
+    file = await run_in_threadpool(local_storage.get, storage_key)
+
+    return file
+
+async def read_file(file):
+    """- Reads file object with max read of `MAX_FILE_READ_BYTES`
+    """
+    try:
+        while chunk:=file.read(MAX_FILE_READ_BYTES):
+            yield chunk
+    finally:
+        file.close()

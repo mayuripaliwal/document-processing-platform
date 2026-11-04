@@ -6,7 +6,7 @@ import Signin from "./Signin";
 import Dashboard from "./Dashboard";
 import Documents from "./Documents";
 import DashboardLayout from "./DashboardLayout";
-import {BrowserRouter, Routes, Route, Link} from "react-router-dom";
+import {BrowserRouter, Routes, Route} from "react-router-dom";
 import {AUTH_STATUSES} from "./AuthConfig";
 import AskDocuments from "./AskDocuments";
 

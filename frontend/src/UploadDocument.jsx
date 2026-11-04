@@ -3,7 +3,7 @@ import {useRef, useState} from "react";
 import {formatFileSize} from "./Documents";
 import {AUTH_STATUSES} from "./AuthConfig";
 
-export default function UploadDocument({setHasNewDocument, setAuthStatus}) {
+export default function UploadDocument({setNewUpload, setAuthStatus}) {
     const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
     const fileInputRef = useRef(null);
     const MAX_FILE_SIZE_BYTES_PDF=10 * 1024 * 1024;
@@ -53,7 +53,7 @@ export default function UploadDocument({setHasNewDocument, setAuthStatus}) {
                 }
             }
             else{
-                setHasNewDocument(true);
+                setNewUpload(count=>count+1);
             }
         }
         catch(error){

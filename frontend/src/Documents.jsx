@@ -17,7 +17,7 @@ export default function Documents({setAuthStatus}){
     const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
     const [documents, setDocuments] =useState([]);
 
-    const [hasNewDocument, setHasNewDocument]=useState(false);
+    const [newUpload, setNewUpload]=useState(0);
 
     const [loadingDocuments, setLoadingDocuments]=useState(false);
 
@@ -76,13 +76,13 @@ export default function Documents({setAuthStatus}){
         finally{
             setLoadingDocuments(false);
         }
-    },[BACKEND_URL, setAuthStatus]);
+    },[BACKEND_URL, setAuthStatus, offset]);
 
     {/**This use effect is for updating documents whenever a new document is uploaded 
     or when fetching next page  */}
     useEffect(()=>{
         getUserDocuments()
-    },[hasNewDocument, offset, getUserDocuments])
+    },[newUpload])
 
     {/**This use effect is for polling document status */}
     useEffect(()=>{
@@ -153,7 +153,7 @@ export default function Documents({setAuthStatus}){
             </p>
         )}
         <div className="mt-10 min-h-full flex-col justify-center items-start mr-10">
-            <UploadDocument setHasNewDocument={setHasNewDocument} setAuthStatus={setAuthStatus}></UploadDocument>
+            <UploadDocument setNewUpload={setNewUpload} setAuthStatus={setAuthStatus}></UploadDocument>
         {documents.length===0 && !loadingDocuments && !getUserDocumentsError && (
             <p
             className="mt-4 text-center text-xl text-gray-600"

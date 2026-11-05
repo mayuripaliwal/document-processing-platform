@@ -3,7 +3,7 @@ import {useState} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 
-export default function AskDocuments({setAuthStatus, documentId}){
+export default function AskDocuments({setAuthStatus, documentId, setPageNumber}){
     const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
     const MAX_QUERY_LENGTH = 200;
     
@@ -61,7 +61,7 @@ export default function AskDocuments({setAuthStatus, documentId}){
     }
     return (
         <main
-        className="mt-4 w-1/2 mx-auto"
+        className="mt-4 ml-8 mr-8 mx-auto"
         >
         <header className="mb-8 text-center">
             <div className="mb-4 text-4xl">✦</div>
@@ -130,11 +130,15 @@ export default function AskDocuments({setAuthStatus, documentId}){
                         </ReactMarkdown>
                         {answer.sources && answer.sources.length > 0 &&(
                             <div className="">
-                                <p>Sources</p>
+                                <p 
+                                className="font-semibold mb-2"
+                                >Sources</p>
                                 {answer.sources.map((source)=>(
-                                    <span
+                                    <button
+                                    key={source}
+                                    onClick={()=> setPageNumber(Number(source))}
                                     className="mt-4 rounded-lg p-4"
-                                    >Page no.: {source}</span>
+                                    >Page no.: {source}</button>
                                 ))}
                             </div>
                         )}   

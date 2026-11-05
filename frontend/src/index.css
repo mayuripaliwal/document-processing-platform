@@ -1,2 +1,13 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+#go-to-page{
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+#go-to-page::-webkit-inner-spin-button,
+#go-to-page::-webkit-outer-spin-button{
+    -webkit-appearance: none;
+    margin: 0;
+}

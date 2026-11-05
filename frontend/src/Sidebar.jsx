@@ -10,8 +10,7 @@ import {AUTH_STATUSES} from "./AuthConfig";
 
 const navigation = [
   { name: 'Dashboard', linkto: '/dashboard' },
-  { name: 'My Documents', linkto: '/documents'},
-  {name: 'Ask Documents', linkto: 'ask/documents'}
+  { name: 'My Documents', linkto: '/documents'}
 ]
 
 function classNames(...classes) {

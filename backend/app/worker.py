@@ -22,6 +22,8 @@ REDIS_SETTINGS=RedisSettings(
     port=6379
 )
 
+MAX_JOB_TRIES=3
+
 async def extract_document_storage_path(document_id:int)->Path | None:
     """
     - Extracts the document storage path for a given document ID from db
@@ -45,6 +47,8 @@ def extract_text(file:Path, ctx)->list[dict]:
     pages=[]
 
     page_nos=sorted(doc.pages.keys())
+
+    print(f"page_nos: {page_nos}")
 
     for page_no in page_nos:
         markdown=doc.export_to_markdown(page_no=page_no).strip()
@@ -134,82 +138,90 @@ async def process_document(ctx,document_id:int):
     - Stores its text chunks in document_chunks table
     """    
     try:
-        storage_path=await extract_document_storage_path(document_id)
-        logger.info("Extracted storage path for document_id: %s", document_id)
-    except Exception:
-        logger.exception("Failed to extract storage path for document_id: %s", document_id)
-        raise
+        try:
+            storage_path=await extract_document_storage_path(document_id)
+            logger.info("Extracted storage path for document_id: %s", document_id)
+        except Exception:
+            logger.exception("Failed to extract storage path for document_id: %s", document_id)
+            raise
 
-    if storage_path is None:
-        #document does not exist, means it got deleted after it was added 
-        # and before worker could process it
-        logger.info("Storage path does not exist for document_id: %s", document_id)
-        return
+        if storage_path is None:
+            #document does not exist, means it got deleted after it was added 
+            # and before worker could process it
+            logger.info("Storage path does not exist for document_id: %s", document_id)
+            return
 
-    await updateDocumentStatus(
-        document_id,
-        DocumentStatus.PROCESSING
-    )
-    try:
-        extracted_pages=await asyncio.to_thread(extract_text,storage_path, ctx)
-    except Exception:
-        logger.exception("Failed to extract text for document_id: %s", document_id)
-        raise
-    extracted_pages_text=[]
-    for page in extracted_pages:
-        extracted_pages_text.append(page["text"])
+        await updateDocumentStatus(
+            document_id,
+            DocumentStatus.PROCESSING
+        )
+        try:
+            extracted_pages=await asyncio.to_thread(extract_text,storage_path, ctx)
+        except Exception:
+            logger.exception("Failed to extract text for document_id: %s", document_id)
+            raise
+        extracted_pages_text=[]
+        for page in extracted_pages:
+            extracted_pages_text.append(page["text"])
 
-    extracted_text="\n\n".join(extracted_pages_text)
-    if not extracted_text.strip():
-        return
+        extracted_text="\n\n".join(extracted_pages_text)
+        if not extracted_text.strip():
+            return
 
-    logger.info("Extracted text for document_id: %s", document_id)
+        logger.info("Extracted text for document_id: %s", document_id)
 
-    try:
-        await save_document_text(document_id, extracted_text)
-    except Exception:
-        logger.exception("Failed to save extracted text for document_id: %s", document_id)
-        raise
+        try:
+            await save_document_text(document_id, extracted_text)
+        except Exception:
+            logger.exception("Failed to save extracted text for document_id: %s", document_id)
+            raise
 
-    logger.info("Saved extracted text for document_id: %s", document_id)
+        logger.info("Saved extracted text for document_id: %s", document_id)
 
-    #store chunks and their embeddings
-    
-    try:
-        chunks=await asyncio.to_thread(chunk_text,extracted_pages)
-    except Exception:
-        logger.exception("Failed to extract chunks for document_id: %s", document_id)
-        raise
+        #store chunks and their embeddings
+        
+        try:
+            chunks=await asyncio.to_thread(chunk_text,extracted_pages)
+        except Exception:
+            logger.exception("Failed to extract chunks for document_id: %s", document_id)
+            raise
 
-    logger.info("Extracted chunks for document_id: %s", document_id)
+        logger.info("Extracted chunks for document_id: %s", document_id)
 
-    model=ctx["embedding_model"]
+        model=ctx["embedding_model"]
 
-    chunk_texts=[]
-    for chunk in chunks:
-        chunk_texts.append(chunk["text"])
+        chunk_texts=[]
+        for chunk in chunks:
+            chunk_texts.append(chunk["text"])
 
-    try:
-        logger.info("Extracting embeddings for document_id: %s", document_id)
-        embeddings=await asyncio.to_thread(model.encode, chunk_texts)
-    except Exception:
-        logger.exception("Failed to extract embeddings for document_id: %s", document_id)
-        raise
+        try:
+            logger.info("Extracting embeddings for document_id: %s", document_id)
+            embeddings=await asyncio.to_thread(model.encode, chunk_texts)
+        except Exception:
+            logger.exception("Failed to extract embeddings for document_id: %s", document_id)
+            raise
 
-    logger.info("Extracted embeddings for document_id: %s", document_id)
+        logger.info("Extracted embeddings for document_id: %s", document_id)
 
-    try:
-        await save_document_chunk_details(document_id,chunks, embeddings.tolist())
-    except Exception:
-        logger.exception("Failed to save chunks and embeddings for document_id: %s", document_id)
-        raise
+        try:
+            await save_document_chunk_details(document_id,chunks, embeddings.tolist())
+        except Exception:
+            logger.exception("Failed to save chunks and embeddings for document_id: %s", document_id)
+            raise
 
-    await updateDocumentStatus(
-        document_id,
-        DocumentStatus.COMPLETED
-    )
+        await updateDocumentStatus(
+            document_id,
+            DocumentStatus.COMPLETED
+        )
 
-    logger.info("Saved chunks and embeddings for document_id: %s", document_id)
+        logger.info("Saved chunks and embeddings for document_id: %s", document_id)
+    except asyncio.CancelledError:
+        logger.exception("Processing failed for document_id=%s, attempt=%s", document_id, ctx["job_try"])
+        await updateDocumentStatus(
+            document_id,
+            DocumentStatus.FAILED
+        )
+
 
 async def updateDocumentStatus(document_id:int, status:DocumentStatus):
     """Updates document status to provided status in db
@@ -249,3 +261,4 @@ class WorkerSettings:
     on_shutdown=shutdown
     redis_settings=REDIS_SETTINGS
     job_timeout = 10 * 60
+    max_tries=MAX_JOB_TRIES

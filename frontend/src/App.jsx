@@ -8,7 +8,6 @@ import Documents from "./Documents";
 import DashboardLayout from "./DashboardLayout";
 import {BrowserRouter, Routes, Route} from "react-router-dom";
 import {AUTH_STATUSES} from "./AuthConfig";
-import AskDocuments from "./AskDocuments";
 import SingleDocument from "./SingleDocument";
 
 function App() {
@@ -59,8 +58,7 @@ function App() {
         <Route element={<DashboardLayout setAuthStatus={setAuthStatus}/>}>
           <Route path="/dashboard" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
           <Route path="/documents" element={<Documents setAuthStatus={setAuthStatus}/>}></Route>
-          <Route path="/documents/:documentId" element={<SingleDocument/>}></Route>
-          <Route path="ask/documents" element={<AskDocuments setAuthStatus={setAuthStatus}/>}></Route>
+          <Route path="/documents/:documentId" element={<SingleDocument setAuthStatus={setAuthStatus}/>}></Route>
           <Route path="/*" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
           <Route path="/" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
         </Route>

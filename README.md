@@ -1,5 +1,22 @@
 # Document Processing Platform
 
+## Tech Stack
+
+|Category|Tools Used|
+|---|---|
+|Frontend| React, React Router, JavaScript, Tailwind CSS, React PDF|
+|Backend| Python, FastAPI|
+|Database and ORM| PostgreSQL, SQLAlchemy, Alembic|
+|Vector Search| pgvector extension |
+|Document Processing (Text and meta data extraction)| Docling|
+|Text Chunking| LangChain `RecursiveCharacterTextSplitter`|
+|Embedding Model| Sentence Transformers (`all-MiniLM-L6-v2`)|
+|LLM Integration| Groq API|
+|Background Job Processing| ARQ|
+|Cache| Redis|
+|Authentication| JWT, Argon2|
+|Testing| pytest|
+
 ## API Endpoints
 
 |Method|Route|Authentication|Description|

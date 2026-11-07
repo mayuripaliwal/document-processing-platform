@@ -91,6 +91,7 @@ The application uses 3 tables:
 |content|Text|NOT NULL|Extracted text of the chunk|
 |embedding|Vector(384)|---|Vector embedding of the extracted text|
 |page_no|Integer|NOT NULL|Page number on which the chunk exists in the document|
+|section_title|Text|---|Section title of the chunk|
 
 > - `document_id` is a foreign key referencing `documents.id`.
 > - When a document record is deleted, all the chunks referencing that `document_id` are deleted as well (ON DELETE CASCADE).

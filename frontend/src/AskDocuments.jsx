@@ -133,12 +133,12 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
                                 <p 
                                 className="font-semibold mb-2"
                                 >Sources</p>
-                                {answer.sources.map((source)=>(
+                                {answer.sources.map(({page_no, section_title}, index)=>(
                                     <button
-                                    key={source}
-                                    onClick={()=> setPageNumber(Number(source))}
+                                    key={index}
+                                    onClick={()=> setPageNumber(Number(page_no))}
                                     className="mt-4 rounded-lg p-4"
-                                    >Page no.: {source}</button>
+                                    >Page no.: {page_no} - {section_title}</button>
                                 ))}
                             </div>
                         )}   

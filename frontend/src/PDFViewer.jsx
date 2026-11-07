@@ -21,6 +21,7 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
                 withCredentials:true
             }}
             onLoadSuccess={({numPages})=>setNumPages(numPages)}
+            onLoadError={(error)=>console.error("PDF Loading failed: ",error)}
             >
                 <div
                 className="flex items-center gap-4 justify-center"

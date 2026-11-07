@@ -48,7 +48,7 @@ function App() {
       <div>
         <p
         className="mt-4 text-center text-gray-900 text-xl"
-        >Checking authentication...</p>;
+        >Checking authentication...</p>
       </div>
       )
     }

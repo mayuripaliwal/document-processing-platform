@@ -145,7 +145,7 @@ export default function Documents({setAuthStatus}){
 
     return (
         <div
-        className="flex-col w-full"
+        className="flex-col w-full  overflow-x-auto"
         >
         {getUserDocumentsError && documents.length===0 && !loadingDocuments &&(
             <p
@@ -154,7 +154,7 @@ export default function Documents({setAuthStatus}){
                 {getUserDocumentsError}
             </p>
         )}
-        <div className="mt-10 min-h-full flex-col justify-center items-start mr-10">
+        <div className="mt-10 min-h-full flex-col justify-center items-start ">
             <UploadDocument setNewUpload={setNewUpload} setAuthStatus={setAuthStatus}></UploadDocument>
         {documents.length===0 && !loadingDocuments && !getUserDocumentsError && (
             <p
@@ -174,11 +174,12 @@ export default function Documents({setAuthStatus}){
         {documents.length>0 && (
             
             <div
-            className="mx-auto ml-4"
+            className="mx-auto w-full lg:max-w-full max-w-5xl overflow-x-auto "
             >
             <ul
-            className="divide-y divide-gray-200"
+            className="min-w-[750px] divide-y divide-gray-200"
             >
+                {/**Documents table header */}
                 <li className="grid grid-cols-5 gap-4 bg-gray-50 py-3 text-sm font-semibold text-gray-600">
                     <span>Document</span>
                     <span>File Size</span>
@@ -186,6 +187,7 @@ export default function Documents({setAuthStatus}){
                     <span>Status</span>
                     <span>Delete</span>
                 </li>
+                {/**Documents table data */}
                 {documents.map((document)=>(
                     <li 
                     key={document.id}

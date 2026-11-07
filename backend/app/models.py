@@ -45,7 +45,7 @@ class User(Base):
 class DocumentChunk(Base):
     """
     Schema for defining a document chunk
-    {`id`, `document_id`, `chunk_index`, `content`, `embedding`, `page_no`}
+    {`id`, `document_id`, `chunk_index`, `content`, `embedding`, `page_no`, `section_title`}
     """
     __tablename__="document_chunks"
 
@@ -63,3 +63,4 @@ class DocumentChunk(Base):
     content:Mapped[str]=mapped_column(Text, nullable=False)
     embedding:Mapped[list[float]]=mapped_column(Vector(384), nullable=True)
     page_no:Mapped[int]=mapped_column(Integer, nullable=False)
+    section_title:Mapped[str]=mapped_column(Text, nullable=True)

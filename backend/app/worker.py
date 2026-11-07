@@ -11,6 +11,7 @@ from app.embeddings import load_embedding_model
 import logging
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from docling_core.types.doc import DocItemLabel
 
 logger=logging.getLogger(__name__)
 
@@ -38,28 +39,50 @@ async def extract_document_storage_path(document_id:int)->Path | None:
         
         return Path(storage_path)
 
-def extract_text(file:Path, ctx)->list[dict]:
+def extract_text(file:Path, ctx)->list[LangchainDocument]:
     """
-    Returns a dict for each page with page_no and text from the given PDF file.
+    Returns a list of LangchainDocument objects with text and metadata from the given PDF file.
     """
     doc=ctx["document_converter"].convert(file).document
 
-    pages=[]
+    current_section=None
+    documents=[]
 
-    page_nos=sorted(doc.pages.keys())
+    for item, level in doc.iterate_items():
+        if item.label==DocItemLabel.TABLE:
+            print("Table:")
+            print(item.export_to_markdown(doc=doc))
+        else:
+            print(
+                item.label,
+                repr(item.text),
+                item.prov[0].page_no if item.prov else None
+            )
+            
+        if item.label==DocItemLabel.SECTION_HEADER:
+            current_section=item.text
+            continue
 
-    print(f"page_nos: {page_nos}")
+        if item.label==DocItemLabel.TEXT:
+            text=item.text
 
-    for page_no in page_nos:
-        markdown=doc.export_to_markdown(page_no=page_no).strip()
+        elif item.label==DocItemLabel.TABLE:
+            text=item.export_to_markdown(doc=doc) # we extract the table as markdown
+        else:
+            continue
 
-        if markdown:
-            pages.append({
-                "page_no":page_no,
-                "text":markdown
-            })
+        if not text or not text.strip() or not item.prov:
+            continue
 
-    return pages
+        documents.append(LangchainDocument(
+            page_content=text,
+            metadata={
+                "page_no":item.prov[0].page_no,
+                "section_title":current_section
+            }
+        ))
+
+    return documents
 
 async def save_document_text(document_id:int, extracted_text:str):
     """
@@ -70,38 +93,28 @@ async def save_document_text(document_id:int, extracted_text:str):
 
         await db.commit()
 
-def chunk_text(pages:list[dict])->list[dict]:
+def chunk_text(documents:list[LangchainDocument])->list[dict]:
     """
-    Returns a list of text chunks with maximum chunk size 200
+    Returns a list of text chunks with maximum chunk size 800
     """
-    CHUNK_SIZE=200
+    CHUNK_SIZE=800
 
-    CHUNK_OVERLAP=50
-
-    langchain_documents=[]
-
-    #page number and content
-    for page in pages:
-        langchain_documents.append(LangchainDocument(page_content=page["text"], 
-            metadata={"page_no":page["page_no"]}
-        ))
-
+    CHUNK_OVERLAP=80
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP
     )
     
-    chunks=[]
-    
-    chunks=text_splitter.split_documents(langchain_documents)
+    chunks=text_splitter.split_documents(documents)
 
     result=[]
 
     for chunk in chunks:
         result.append({
             "text":chunk.page_content,
-            "page_no":chunk.metadata['page_no']
+            "page_no":chunk.metadata['page_no'],
+            "section_title":chunk.metadata['section_title']
         })
 
     return result
@@ -120,6 +133,7 @@ async def save_document_chunk_details(document_id:int,chunks:list[dict], embeddi
                 "content":chunk["text"],
                 "embedding":embedding,
                 "page_no":chunk["page_no"],
+                "section_title":chunk["section_title"]
             }
         )
 
@@ -156,15 +170,15 @@ async def process_document(ctx,document_id:int):
             DocumentStatus.PROCESSING
         )
         try:
-            extracted_pages=await asyncio.to_thread(extract_text,storage_path, ctx)
+            extracted_documents=await asyncio.to_thread(extract_text,storage_path, ctx)
         except Exception:
             logger.exception("Failed to extract text for document_id: %s", document_id)
             raise
-        extracted_pages_text=[]
-        for page in extracted_pages:
-            extracted_pages_text.append(page["text"])
+        extracted_text=[]
+        for document in extracted_documents:
+            extracted_text.append(document.page_content)
 
-        extracted_text="\n\n".join(extracted_pages_text)
+        extracted_text="\n\n".join(extracted_text)
         if not extracted_text.strip():
             return
 
@@ -181,7 +195,7 @@ async def process_document(ctx,document_id:int):
         #store chunks and their embeddings
         
         try:
-            chunks=await asyncio.to_thread(chunk_text,extracted_pages)
+            chunks=await asyncio.to_thread(chunk_text,extracted_documents)
         except Exception:
             logger.exception("Failed to extract chunks for document_id: %s", document_id)
             raise

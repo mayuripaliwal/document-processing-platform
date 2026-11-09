@@ -37,7 +37,8 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
                     setAnswer(null);
                 }
                 else if (response.status===404){
-                    setSearchError("We could not find what you were looking for.")
+                    setSearchError("We could not find what you were looking for.");
+                    setAnswer(null);
                 }
                 else{
                     setSearchError("Something went wrong. Please try again.")
@@ -110,7 +111,7 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
             </p>
         )}
         {/* Answer */}
-            {!loading && answer && answer.answer && (
+            {!loading && answer && answer.length>0 && (
                 <section className="mt-8 mb-8">
                     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center gap-2">
@@ -122,26 +123,32 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
 
                         <div
                         className="prose prose-gray max-w-none leading-7"
-                        >                               
-                        <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        >
-                            {answer.answer}
-                        </ReactMarkdown>
-                        {answer.sources && answer.sources.length > 0 &&(
-                            <div className="">
-                                <p 
-                                className="font-semibold mb-2"
-                                >Sources</p>
-                                {answer.sources.map(({page_no, section_title}, index)=>(
-                                    <button
-                                    key={index}
-                                    onClick={()=> setPageNumber(Number(page_no))}
-                                    className="mt-4 rounded-lg p-4"
-                                    >Page no.: {page_no} - {section_title}</button>
-                                ))}
-                            </div>
-                        )}   
+                        >  
+                            {answer.map((part, index)=>(
+                                <div key={index}>
+                                <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                >
+                                    {part.answer_part}
+                                </ReactMarkdown>
+                                
+                                {part.citations.length>0 &&(
+                                    <div>
+                                        {part.citations.map(({page_no, section_title}, index)=>(
+                                            <span>
+                                                <button
+                                                key={index}
+                                                onClick={()=> setPageNumber(Number(page_no))}
+                                                className="text-sm rounded-lg bg-blue-100 m-1 p-1 hover:bg-blue-200"
+                                                >Page: {page_no} ⋅ {section_title}
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                </div>
+                            ))}                             
+                               
                         </div>
                     </div>
                 </section>

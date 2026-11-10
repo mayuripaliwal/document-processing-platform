@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import BinaryIO
 from uuid import uuid4
 from fastapi import UploadFile
+from abc import ABC, abstractmethod
 
 MAX_FILE_SIZE_BYTES=10485760
 MAX_FILE_READ_BYTES=1048576
@@ -24,14 +25,10 @@ class InvalidFileNameError(Exception):
     File does not have a valid file name
     """
     pass
-class LocalFileStorage():
-    """
-    - Supports save method to upload a document to local storage
-    - Supports delete method to delete a document from local storage
-    """
-    def __init__(self, upload_dir: Path):
-        self.upload_dir=upload_dir.resolve()
 
+class IFileStorage(ABC):
+    """Abstract class for file storage.
+    """
     def getMaxFileSize(self)->int:
         """
         Returns max file size that is permissible.
@@ -42,7 +39,7 @@ class LocalFileStorage():
         """
         - Returns if a file has a permissible file size
         """
-        return file.size is not None and file.size <= MAX_FILE_SIZE_BYTES
+        return file.size is not None and file.size <= self.getMaxFileSize()
 
     def isValidFileType(self,file:UploadFile)->bool:
         """
@@ -52,6 +49,34 @@ class LocalFileStorage():
             file.filename is not None
             and file.content_type=="application/pdf"
         )
+    
+    @abstractmethod
+    def save(self, file:BinaryIO, filename:str)->str:
+        """- Stores a file and returns its storage key.
+        - If filename is invalid , `InvalidFileNameError` is raised.
+        """
+        pass
+
+    @abstractmethod
+    def delete(self, storage_key:str)->None:
+        """- Deletes a file using its storage_key.
+        - If storage_key is invalid, `ValueError` is raised.
+        """
+        pass
+
+    @abstractmethod
+    def get(self, storage_key:str)->BinaryIO | None:
+        """- Returns file object.
+        - If not found, returns None
+        """
+        pass
+
+class LocalStorage(IFileStorage):
+    """
+    - Stores file objects in local storage.
+    """
+    def __init__(self, upload_dir: Path):
+        self.upload_dir=upload_dir.resolve()
 
     def save(self,file:BinaryIO, filename:str)->str:
         """
@@ -118,5 +143,4 @@ class LocalFileStorage():
             return None
 
         return destination.open("rb")
-
-
+    

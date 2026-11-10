@@ -13,7 +13,7 @@ import jwt
 import os
 from datetime import datetime,timedelta,timezone
 from jwt import InvalidTokenError, ExpiredSignatureError
-from app.schemas import LocalFileStorage
+from app.schemas import IFileStorage, LocalStorage
 from pathlib import Path
 from contextlib import asynccontextmanager
 from arq.connections import create_pool, RedisSettings
@@ -121,7 +121,7 @@ app.add_middleware(
 
 ph=PasswordHasher()
 
-local_storage=LocalFileStorage(FILE_STORAGE_DIR)
+file_storage=LocalStorage(FILE_STORAGE_DIR)
 
 async def get_user(request:Request,db:AsyncSession=Depends(get_db))->int:
     """
@@ -275,7 +275,6 @@ async def logout(response:Response, user_id:int=Depends(get_user)):
     }
 
 @app.post('/documents',status_code=status.HTTP_201_CREATED)
-#TODO add file upload size limit, file type checking
 async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=Depends(get_user),db=Depends(get_db)):
     """
     - Stores the given file for the given user
@@ -292,21 +291,21 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
     #5. if db save is not successful, remove the document from storage and return 500
     #6. if db save is successful return 201.
 
-    if not local_storage.isValidFileSize(file):
+    if not file_storage.isValidFileSize(file):
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="File exceeds the maximum allowed size of 10 MiB."
         )
 
-    if not local_storage.isValidFileType(file):
+    if not file_storage.isValidFileType(file):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Please upload a valid PDF file."
         )
     
     try:
-        storage_key=await run_in_threadpool(local_storage.save,file.file,file.filename)
-        storage_path=str(local_storage.upload_dir/storage_key)
+        storage_key=await run_in_threadpool(file_storage.save,file.file,file.filename)
+        storage_path=str(file_storage.upload_dir/storage_key)
     except FileTooLargeError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -338,7 +337,7 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
         logger.exception("Failed to insert document: %s in DB", file.filename)
         #if db write is unsuccesful, remove the stored file
         try:
-            await run_in_threadpool(local_storage.delete, storage_key)
+            await run_in_threadpool(file_storage.delete, storage_key)
             
         except Exception as AttemptDocumentDeleteException:
             logger.exception("Failed to delete document file: %s from storage after failed document insert.", file.filename)
@@ -401,7 +400,7 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
             detail="Document not found."
         )
     try:
-        await run_in_threadpool(local_storage.delete,storage_key)
+        await run_in_threadpool(file_storage.delete,storage_key)
     except (ValueError, OSError) as Value_OS_ERROR:
         logger.exception("Failed to delete document file with storage_key: %s", storage_key)
         # case when file couldnt be deleted
@@ -473,6 +472,7 @@ async def search_documents(request:Request,document_id:int, query:str=Query(min_
     return answer
 
 @app.get('/documents/{document_id}/file',status_code=status.HTTP_200_OK)
+#TODO: add a test for this API
 async def getDocumentFile(document_id: int, user_id:int=Depends(get_user),db=Depends(get_db)):
     """
     - Fetches document object for a given document id and user_id.
@@ -868,7 +868,7 @@ async def fetchDocumentFile(document_id:int, user_id:int, db):
     storage_key=storage_key.scalar_one_or_none()
 
     # Now fetch the file from storage
-    file = await run_in_threadpool(local_storage.get, storage_key)
+    file = await run_in_threadpool(file_storage.get, storage_key)
 
     return file
 

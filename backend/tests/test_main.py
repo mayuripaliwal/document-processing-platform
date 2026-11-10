@@ -2,7 +2,7 @@ import asyncio
 import sys
 from app import main
 import pytest
-from app.schemas import LocalFileStorage
+from app.schemas import LocalStorage
 from sqlalchemy.exc import SQLAlchemyError
 
 if sys.platform=="win32":
@@ -54,7 +54,7 @@ def test_login(client):
     """
     - Test login is successful - 200
     - Test login with wrong password - 401
-    - Test login with wrong email - 401
+    - Test login with wrong email - 404
     """
 
     assert create_user(client,"test@example.com","stringst").status_code==201
@@ -71,7 +71,7 @@ def test_login(client):
 
     response=login_user(client,"wrong_email@example.com","stringst")
 
-    assert response.status_code==401
+    assert response.status_code==404
 
 
 def test_post_document(client, tmp_path, monkeypatch):
@@ -80,7 +80,7 @@ def test_post_document(client, tmp_path, monkeypatch):
     - Test unauthenticated document upload fails with - 401
     - Test invalid document type, name and size fails with - 415/400/413
     """
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
     pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
 
     response=client.post('/documents',files={
@@ -119,7 +119,7 @@ def test_post_document(client, tmp_path, monkeypatch):
 
     #Test invalid file size
 
-    local_file_storage=LocalFileStorage(tmp_path)
+    local_file_storage=LocalStorage(tmp_path)
 
     large_pdf_content=b"a"*(local_file_storage.getMaxFileSize()+1)
     
@@ -151,7 +151,7 @@ def test_failed_post_document(client, tmp_path, monkeypatch):
     
     assert login_user(client,"test@example.com","stringst").status_code==200
 
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
 
     async def fail_create_document(**kwargs):
         raise RuntimeError("Simulated database failure")
@@ -174,13 +174,13 @@ def test_failed_save_document(client, tmp_path, monkeypatch):
     
     assert login_user(client,"test@example.com","stringst").status_code==200
     
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
     pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
 
     def fail_save_document(file,filename):
         raise OSError("Simulated disk failure")
 
-    monkeypatch.setattr(main.local_storage,"save", fail_save_document)
+    monkeypatch.setattr(main.file_storage,"save", fail_save_document)
 
     failed_response=client.post('/documents',files={
         "file":("test.pdf",pdf_content,"application/pdf")
@@ -198,7 +198,7 @@ def test_get_document(client,monkeypatch, tmp_path):
     - Tests that a user can see all their documents 
     - Tests that a user can only see their documents
     """
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
 
     # Tests that unauthenticated access returns 401
     
@@ -238,9 +238,11 @@ def test_get_document(client,monkeypatch, tmp_path):
 
     documents=data["documents"]
 
-    assert len(documents[0])==4
+    assert len(documents[0])==5
 
     assert documents[0]["file_name"]=="test_pdf"
+
+    assert documents[0]["document_status"]=="UPLOADED"
 
     # Tests that a user can only see their documents
 
@@ -264,7 +266,7 @@ def test_delete_document(client,monkeypatch, tmp_path):
     - Test successful response even in case of file not exist on storage but exist in db
     - Test storage file deletion error
     """
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
 
     # Test successful document deletion
 
@@ -333,7 +335,7 @@ def test_delete_document(client,monkeypatch, tmp_path):
     def fail_delete_document(storage_key):
         raise OSError("Failed to delete document")
 
-    monkeypatch.setattr(main.local_storage,"delete", fail_delete_document)
+    monkeypatch.setattr(main.file_storage,"delete", fail_delete_document)
 
     response=client.delete(f'/documents/{document_id}')
         
@@ -344,7 +346,7 @@ def test_delete_db_document(client,tmp_path,monkeypatch):
     """
     - Test db file metadata deletion error
     """
-    monkeypatch.setattr(main,"local_storage",LocalFileStorage(tmp_path))
+    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
     
     assert create_user(client,"another_user@example.com","stringst").status_code==201
             

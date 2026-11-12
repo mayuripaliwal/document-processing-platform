@@ -3,6 +3,8 @@ from typing import BinaryIO
 from uuid import uuid4
 from fastapi import UploadFile
 from abc import ABC, abstractmethod
+from botocore.exceptions import ClientError
+from io import BytesIO
 
 MAX_FILE_SIZE_BYTES=10485760
 MAX_FILE_READ_BYTES=1048576
@@ -59,6 +61,7 @@ class IFileStorage(ABC):
     @abstractmethod
     def get(self, storage_key:str)->BinaryIO | None:
         """- Returns file object.
+        - If storage_key is invalid, raises Value Error
         - If not found, returns None
         """
         pass
@@ -123,6 +126,7 @@ class LocalStorage(IFileStorage):
 
     def get(self, storage_key:str)->BinaryIO | None:
         """- Returns BinaryIO object from local storage for a given storage_key
+        - If storage_key is invalid, raises Value Error
         - Returns None when not found
         """
 
@@ -135,4 +139,85 @@ class LocalStorage(IFileStorage):
             return None
 
         return destination.open("rb")
+
+class ObjectStorage(IFileStorage):
+    """
+    - Stores file objects in supabase object storage.
+    """
+    def __init__(self, s3_client):
+        self.s3_client=s3_client
+
+    def save(self,file:BinaryIO, filename:str)->str:
+        """
+        - Saves a file in object storage and returns its storage key.
+        - Check file size does not exceed `MAX_FILE_SIZE_BYTES`
+        """
+        if not filename or Path(filename).name!=filename:
+            raise InvalidFileNameError("Invalid filename")
+        
+        storage_key=f"{uuid4().hex}{Path(filename).suffix.lower()}"
+
+        file.seek(0, 2) # move cursor to end of file
+
+        file_size=file.tell() # get file size
+
+        if file_size>self.getMaxFileSize():
+            raise FileTooLargeError("File exceeds maximum allowed file size")
+
+        file.seek(0) # move cursor to beginning of file
+
+        self.s3_client.upload_fileobj(
+            file,
+            "documents",
+            storage_key,
+            ExtraArgs={
+                "ContentType":"application/pdf"
+            }
+        )
+
+        return storage_key
+    
+    def delete(self, storage_key:str)->None:
+        """
+        - Deletes a stored file using its storage key
+        - If storage_key is invalid, raises Value Error
+        - No exception is raised if file does not exist but storage_key is valid
+        """
+
+        if not storage_key or Path(storage_key).name!=storage_key:
+            raise ValueError("Invalid storage key")
+
+        self.s3_client.delete_object(
+            Bucket="documents",
+            Key=storage_key
+        )
+
+
+    def get(self, storage_key:str)->BinaryIO | None:
+        """- Returns BinaryIO object from object storage for a given storage_key
+        - If storage_key is invalid, raises Value Error
+        - Returns None when file not found
+        """
+        if not storage_key or Path(storage_key).name!=storage_key:
+            raise ValueError("Invalid storage key")
+        
+        try:
+            response=self.s3_client.get_object(
+                Bucket="documents",
+                Key=storage_key
+            )
+
+            body=response["Body"]
+
+            try:
+                file_bytes=body.read()
+            finally:
+                body.close()
+
+            return BytesIO(file_bytes)
+        except ClientError as e:
+            if e.response["Error"]["Code"]=="NoSuchKey":
+                return None
+            raise
+        
     

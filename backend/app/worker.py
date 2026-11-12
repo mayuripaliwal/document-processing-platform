@@ -12,6 +12,14 @@ import logging
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from docling_core.types.doc import DocItemLabel
+from app.storage import ObjectStorage, IFileStorage
+from typing import BinaryIO
+import boto3
+import os
+from dotenv import load_dotenv
+from docling.datamodel.base_models import DocumentStream
+
+load_dotenv()
 
 logger=logging.getLogger(__name__)
 
@@ -25,25 +33,28 @@ REDIS_SETTINGS=RedisSettings(
 
 MAX_JOB_TRIES=3
 
-async def extract_document_storage_path(document_id:int)->Path | None:
+async def extract_document_storage_key(document_id:int)->str | None:
     """
-    - Extracts the document storage path for a given document ID from db
+    - Extracts the document storage_key for a given document ID from db
     - Returns None if document does not exist
     """
     async with SessionLocal() as db:
-        result=await db.execute(select(Document.storage_path).where(Document.id==document_id))
-        storage_path=result.scalar_one_or_none()
+        result=await db.execute(select(Document.stored_file_name).where(Document.id==document_id))
+        storage_key=result.scalar_one_or_none()
 
-        if storage_path is None:
+        if storage_key is None:
             return None
         
-        return Path(storage_path)
+        return storage_key
 
-def extract_text(file:Path, ctx)->list[LangchainDocument]:
+def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
     """
     Returns a list of LangchainDocument objects with text and metadata from the given PDF file.
     """
-    doc=ctx["document_converter"].convert(file).document
+    doc=ctx["document_converter"].convert(DocumentStream(
+        name="document.pdf",
+        stream=file
+    )).document
 
     current_section=None
     documents=[]
@@ -152,28 +163,51 @@ async def process_document(ctx,document_id:int):
     - Stores its text chunks in document_chunks table
     """    
     try:
+        # 1. Extract storage_key of the document from DB
         try:
-            storage_path=await extract_document_storage_path(document_id)
-            logger.info("Extracted storage path for document_id: %s", document_id)
+            storage_key=await extract_document_storage_key(document_id)
+            logger.info("Extracted storage_key for document_id: %s", document_id)
         except Exception:
-            logger.exception("Failed to extract storage path for document_id: %s", document_id)
+            logger.exception("Failed to extract storage_key for document_id: %s", document_id)
             raise
 
-        if storage_path is None:
-            #document does not exist, means it got deleted after it was added 
+        if storage_key is None:
+            # document does not exist, means it got deleted after it was added 
             # and before worker could process it
-            logger.info("Storage path does not exist for document_id: %s", document_id)
-            return
+            logger.info("storage_key does not exist for document_id: %s", document_id)
+            return 
 
+        # 2. Retrieve file from file storage
+
+        try:
+            file=await asyncio.to_thread(ctx["file_storage"].get, storage_key)
+
+            if file is None:
+                logger.error("File not found for document_id: %s", document_id)
+                return 
+        except ValueError:
+            logger.exception("Found invalid storage_key for document_id: %s in DB", document_id)
+            raise
+
+        # 3. Update document status
+                
         await updateDocumentStatus(
             document_id,
             DocumentStatus.PROCESSING
         )
+        
+        # 4. Extract text and metadata from file for each page
+        
         try:
-            extracted_documents=await asyncio.to_thread(extract_text,storage_path, ctx)
+            extracted_documents=await asyncio.to_thread(extract_text,file, ctx)
         except Exception:
             logger.exception("Failed to extract text for document_id: %s", document_id)
             raise
+        finally:
+            file.close()
+
+        # 5. Extract text from the extracted_documents
+        
         extracted_text=[]
         for document in extracted_documents:
             extracted_text.append(document.page_content)
@@ -184,6 +218,8 @@ async def process_document(ctx,document_id:int):
 
         logger.info("Extracted text for document_id: %s", document_id)
 
+        # 6. Save extracted text in DB
+        
         try:
             await save_document_text(document_id, extracted_text)
         except Exception:
@@ -192,7 +228,7 @@ async def process_document(ctx,document_id:int):
 
         logger.info("Saved extracted text for document_id: %s", document_id)
 
-        #store chunks and their embeddings
+        # 7. Extract chunks each containing text and metadata from extracted_documents
         
         try:
             chunks=await asyncio.to_thread(chunk_text,extracted_documents)
@@ -204,10 +240,14 @@ async def process_document(ctx,document_id:int):
 
         model=ctx["embedding_model"]
 
+        # 8. Extract text from each chunk
+        
         chunk_texts=[]
         for chunk in chunks:
             chunk_texts.append(chunk["text"])
 
+        # 9. Generate embeddings for each chunk text
+        
         try:
             logger.info("Extracting embeddings for document_id: %s", document_id)
             embeddings=await asyncio.to_thread(model.encode, chunk_texts)
@@ -217,18 +257,23 @@ async def process_document(ctx,document_id:int):
 
         logger.info("Extracted embeddings for document_id: %s", document_id)
 
+        # 10. Save chunks and embeddings in DB
+        
         try:
             await save_document_chunk_details(document_id,chunks, embeddings.tolist())
         except Exception:
             logger.exception("Failed to save chunks and embeddings for document_id: %s", document_id)
             raise
 
+        # 11. Update document status to COMPLETED
+        
         await updateDocumentStatus(
             document_id,
             DocumentStatus.COMPLETED
         )
 
         logger.info("Saved chunks and embeddings for document_id: %s", document_id)
+
     except asyncio.CancelledError:
         logger.exception("Processing failed for document_id=%s, attempt=%s", document_id, ctx["job_try"])
         await updateDocumentStatus(
@@ -263,11 +308,27 @@ async def startup(ctx):
     ctx["document_converter"]=DocumentConverter()
 
     logger.info("Document converter loaded")
+
+    # s3_client for ObjectStorage
+    s3_client=boto3.client(
+        "s3",
+        endpoint_url=os.environ["SUPABASE_S3_ENDPOINT"],
+        region_name=os.environ["SUPABASE_S3_REGION"],
+        aws_access_key_id=os.environ["SUPABASE_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["SUPABASE_SECRET_ACCESS_KEY"]
+    )
+
+    ctx["s3_client"]=s3_client
+
+    ctx["file_storage"]:IFileStorage=ObjectStorage(s3_client)
     
     
 async def shutdown(ctx):
+    s3_client=ctx.get("s3_client")
+
+    s3_client.close()
+
     logger.info("Stopped ARQ Worker")
-    pass
 
 class WorkerSettings:
     functions=[process_document]

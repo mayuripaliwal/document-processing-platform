@@ -23,7 +23,9 @@ import json
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from app.storage import FileTooLargeError, InvalidFileNameError, UserAccount, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage
+from app.storage import FileTooLargeError, InvalidFileNameError, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage, ObjectStorage
+import boto3
+from typing import BinaryIO
 
 logger=logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
@@ -101,8 +103,19 @@ async def lifespan(app:FastAPI):
 
     try:
         app.state.embedding_model=await run_in_threadpool(load_embedding_model)
+        # s3_client for ObjectStorage
+        s3_client=boto3.client(
+            "s3",
+            endpoint_url=os.environ["SUPABASE_S3_ENDPOINT"],
+            region_name=os.environ["SUPABASE_S3_REGION"],
+            aws_access_key_id=os.environ["SUPABASE_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["SUPABASE_SECRET_ACCESS_KEY"]
+        )
+
+        app.state.file_storage=ObjectStorage(s3_client)
         yield
     finally:
+        s3_client.close()
         await redis_pool.close()
         await app.state.groq_client.close()
 
@@ -120,8 +133,6 @@ app.add_middleware(
 )
 
 ph=PasswordHasher()
-
-file_storage=LocalStorage(FILE_STORAGE_DIR)
 
 async def get_user(request:Request,db:AsyncSession=Depends(get_db))->int:
     """
@@ -290,7 +301,7 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
     #4. if successful, save the document in db
     #5. if db save is not successful, remove the document from storage and return 500
     #6. if db save is successful return 201.
-
+    file_storage=app.state.file_storage
     if not file_storage.isValidFileSize(file):
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -305,7 +316,6 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
     
     try:
         storage_key=await run_in_threadpool(file_storage.save,file.file,file.filename)
-        storage_path=str(file_storage.upload_dir/storage_key)
     except FileTooLargeError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -329,7 +339,6 @@ async def postDocument(request:Request, file:UploadFile= File(...),user_id:int=D
             stored_file_name=storage_key,
             mime_type="application/pdf",
             file_size=file.size,
-            storage_path=storage_path,
             db=db,
             document_status=DocumentStatus.UPLOADED
             )
@@ -400,6 +409,7 @@ async def deleteDocument(document_id:int, user_id:int=Depends(get_user),db=Depen
             detail="Document not found."
         )
     try:
+        file_storage=app.state.file_storage
         await run_in_threadpool(file_storage.delete,storage_key)
     except (ValueError, OSError) as Value_OS_ERROR:
         logger.exception("Failed to delete document file with storage_key: %s", storage_key)
@@ -585,7 +595,7 @@ async def userExists(user_id:int,db:AsyncSession)->bool:
     return existing_user_id is not None
 
 async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_type:str,
-    file_size:int,storage_path:str, document_status:DocumentStatus,db:AsyncSession)->int:
+    file_size:int, document_status:DocumentStatus,db:AsyncSession)->int:
     """
     - Returns newly created document_id
     - Creates a document in Documents
@@ -598,7 +608,6 @@ async def createDocument(user_id:int,file_name:str, stored_file_name:str,mime_ty
         stored_file_name=stored_file_name,
         mime_type=mime_type,
         file_size=file_size,
-        storage_path=storage_path,
         document_status=document_status
     )
 
@@ -849,7 +858,7 @@ async def generate_answer(query:str, search_results:list[dict[str, int | str]], 
         logger.exception("Failed to get llm response.")
         return None
 
-async def fetchDocumentFile(document_id:int, user_id:int, db):
+async def fetchDocumentFile(document_id:int, user_id:int, db)->BinaryIO | None:
     """- Fetches document object for given document_id and user_id
     - Returns None when not found
     """
@@ -866,6 +875,11 @@ async def fetchDocumentFile(document_id:int, user_id:int, db):
     })
     
     storage_key=storage_key.scalar_one_or_none()
+
+    if not storage_key:
+        return None
+
+    file_storage=app.state.file_storage
 
     # Now fetch the file from storage
     file = await run_in_threadpool(file_storage.get, storage_key)

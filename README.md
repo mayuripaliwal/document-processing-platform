@@ -8,6 +8,7 @@
 |Backend| Python, FastAPI|
 |Database and ORM| PostgreSQL, SQLAlchemy, Alembic|
 |Vector Search| pgvector extension |
+|Document Storage|Supabase Storage (S3-compatible API) + boto3 |
 |Document Processing (Text and meta data extraction)| Docling|
 |Text Chunking| LangChain `RecursiveCharacterTextSplitter`|
 |Embedding Model| Sentence Transformers (`all-MiniLM-L6-v2`)|
@@ -16,6 +17,8 @@
 |Cache| Redis|
 |Authentication| JWT, Argon2|
 |Testing| pytest|
+
+> Note: Document Storage supports both `ObjectStorage` as well as `LocalStorage` through the `IFileStorage` abstraction. Currently, `ObjectStorage` is used, implemented using boto3 and Supabase storage's S3 compatible API. `LocalStorage` is kept as an option for local testing.
 
 ## API Endpoints
 
@@ -56,10 +59,9 @@ The application uses 3 tables:
 |id|BigInteger|PRIMARY KEY|Unique identifier for documents|
 |user_id | BigInteger | FOREIGN KEY, NOT NULL | References the user_id of the user to whom the document belongs to|
 |file_name | String(255) | NOT NULL | The file name of the file uploaded by the user|
-|stored_file_name | String(255) | UNIQUE, NOT NULL | Unique file name generated using uuid4 to prevent file name collisions|
+|stored_file_name | String(255) | UNIQUE, NOT NULL | Unique `storage_key` generated using uuid4 to prevent file name collisions|
 |mime_type|String(100)|NOT NULL|File type (eg: application/pdf)|
 |file_size|BigInteger|NOT NULL|File size of the document in bytes|
-|storage_path|Text|NOT NULL|Full storage path of stored file|
 |created_at|DateTime|NOT NULL, DEFAULT NOW()|Timezone-aware timestamp when document is uploaded|
 |extracted_text|Text|---|Text extracted from the document|
 |document_status|Enum(DocumentStatus)|NOT NULL|Status of the document in the document processing pipeline|

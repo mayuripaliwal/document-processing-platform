@@ -872,7 +872,7 @@ async def fetchDocumentFile(document_id:int, user_id:int, db):
 
     return file
 
-async def read_file(file):
+def read_file(file):
     """- Reads file object with max read of `MAX_FILE_READ_BYTES`
     """
     try:

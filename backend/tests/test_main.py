@@ -2,7 +2,7 @@ import asyncio
 import sys
 from app import main
 import pytest
-from app.schemas import LocalStorage
+from app.storage import LocalStorage
 from sqlalchemy.exc import SQLAlchemyError
 
 if sys.platform=="win32":

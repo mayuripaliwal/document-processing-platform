@@ -116,7 +116,7 @@ async def lifespan(app:FastAPI):
         yield
     finally:
         s3_client.close()
-        await redis_pool.close()
+        await redis_pool.aclose()
         await app.state.groq_client.close()
 
 app=FastAPI(
@@ -473,7 +473,6 @@ async def search_documents(request:Request,document_id:int, query:str=Query(min_
         )
 
     if len(answer)==0:
-        print(answer)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The requested resource could not be found."

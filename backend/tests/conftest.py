@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, text
 import pytest_asyncio
 from app.models import Document, User
+from app.storage import LocalStorage
+from app import main
 
 TEST_DATABASE_URL=os.environ["TEST_DATABASE_URL"]
 
@@ -20,14 +22,16 @@ async def override_get_db():
         yield db
 
 @pytest.fixture
-def client():
+def client(tmp_path, monkeypatch):
     """
     - Provides a test client `client`
     - Overrides `get_db` to `override_get_db` which provides a test db session
     """
+    monkeypatch.setattr(main, "load_embedding_model", lambda:None)
     app.dependency_overrides[get_db]=override_get_db
 
     with TestClient(app) as client:
+        app.state.file_storage=LocalStorage(tmp_path)
         yield client
 
     app.dependency_overrides.clear()

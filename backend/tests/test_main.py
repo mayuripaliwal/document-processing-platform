@@ -33,11 +33,10 @@ def login_user(client,email:str,password:str):
         }
     )
 
-def create_document(client):
+def create_document(client, pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"):
     """
     - Helper to create a mock document with name `test_pdf`
     """
-    pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
     return client.post('/documents',files={
         "file":("test_pdf",pdf_content,"application/pdf")
     })
@@ -74,13 +73,13 @@ def test_login(client):
     assert response.status_code==404
 
 
-def test_post_document(client, tmp_path, monkeypatch):
+def test_post_document(client, tmp_path):
     """
     - Test document upload is successful - 201
     - Test unauthenticated document upload fails with - 401
     - Test invalid document type, name and size fails with - 415/400/413
     """
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
+
     pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
 
     response=client.post('/documents',files={
@@ -151,8 +150,6 @@ def test_failed_post_document(client, tmp_path, monkeypatch):
     
     assert login_user(client,"test@example.com","stringst").status_code==200
 
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
-
     async def fail_create_document(**kwargs):
         raise RuntimeError("Simulated database failure")
 
@@ -174,13 +171,12 @@ def test_failed_save_document(client, tmp_path, monkeypatch):
     
     assert login_user(client,"test@example.com","stringst").status_code==200
     
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
     pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
 
     def fail_save_document(file,filename):
         raise OSError("Simulated disk failure")
 
-    monkeypatch.setattr(main.file_storage,"save", fail_save_document)
+    monkeypatch.setattr(main.app.state.file_storage,"save", fail_save_document)
 
     failed_response=client.post('/documents',files={
         "file":("test.pdf",pdf_content,"application/pdf")
@@ -198,7 +194,6 @@ def test_get_document(client,monkeypatch, tmp_path):
     - Tests that a user can see all their documents 
     - Tests that a user can only see their documents
     """
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
 
     # Tests that unauthenticated access returns 401
     
@@ -266,7 +261,6 @@ def test_delete_document(client,monkeypatch, tmp_path):
     - Test successful response even in case of file not exist on storage but exist in db
     - Test storage file deletion error
     """
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
 
     # Test successful document deletion
 
@@ -335,7 +329,7 @@ def test_delete_document(client,monkeypatch, tmp_path):
     def fail_delete_document(storage_key):
         raise OSError("Failed to delete document")
 
-    monkeypatch.setattr(main.file_storage,"delete", fail_delete_document)
+    monkeypatch.setattr(main.app.state.file_storage,"delete", fail_delete_document)
 
     response=client.delete(f'/documents/{document_id}')
         
@@ -346,7 +340,6 @@ def test_delete_db_document(client,tmp_path,monkeypatch):
     """
     - Test db file metadata deletion error
     """
-    monkeypatch.setattr(main,"file_storage",LocalStorage(tmp_path))
     
     assert create_user(client,"another_user@example.com","stringst").status_code==201
             
@@ -362,7 +355,7 @@ def test_delete_db_document(client,tmp_path,monkeypatch):
 
     document_id=1
 
-    async def fail_delete_document_db(**kwargs):
+    async def fail_delete_document_db(document_id, user_id, db):
         raise SQLAlchemyError("Failed to delete document from db")
 
     monkeypatch.setattr(main,"deleteDocumentByID", fail_delete_document_db)
@@ -370,3 +363,43 @@ def test_delete_db_document(client,tmp_path,monkeypatch):
     response=client.delete(f'/documents/{document_id}')
         
     assert response.status_code==500
+
+def test_get_document_file(client):
+    """
+    - Test that user can get only their document file
+    """
+
+    assert create_user(client, "user@example.com","stringst").status_code==201
+
+    assert login_user(client, "user@example.com","stringst").status_code==200
+
+    # create document
+
+    pdf_content=b"%PDF-1.\n Test PDF Content\n%%EOF"
+
+    response = create_document(client, pdf_content)
+
+    assert response.status_code==201
+
+    document_id=1
+
+    response= client.get(f'/documents/{document_id}/file')
+
+    assert response.status_code==200
+
+    assert response.content==pdf_content
+
+    assert response.headers["content-type"]=="application/pdf"
+
+    assert response.headers["content-disposition"]=="inline"
+
+    assert client.post('/logout').status_code==200
+
+    assert create_user(client, "another_user@example.com","stringst").status_code==201
+    
+    assert login_user(client, "another_user@example.com","stringst").status_code==200
+
+    response= client.get(f'/documents/{document_id}/file')
+    
+    assert response.status_code==404
+

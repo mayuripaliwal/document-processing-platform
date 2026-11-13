@@ -12,13 +12,13 @@ import logging
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from docling_core.types.doc import DocItemLabel
-from app.storage import ObjectStorage, IFileStorage
+from app.storage import ObjectStorage, IFileStorage, LocalStorage
 from typing import BinaryIO
 import boto3
 import os
 from dotenv import load_dotenv
 from docling.datamodel.base_models import DocumentStream
-
+from app.main import FILE_STORAGE_DIR
 load_dotenv()
 
 logger=logging.getLogger(__name__)
@@ -63,19 +63,16 @@ def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
         if item.label==DocItemLabel.TABLE:
             print("Table:")
             print(item.export_to_markdown(doc=doc))
-        else:
-            print(
-                item.label,
-                repr(item.text),
-                item.prov[0].page_no if item.prov else None
-            )
             
         if item.label==DocItemLabel.SECTION_HEADER:
             current_section=item.text
             continue
 
-        if item.label==DocItemLabel.TEXT:
+        elif item.label == DocItemLabel.TEXT:
             text=item.text
+
+        elif item.label==DocItemLabel.LIST_ITEM:
+            text=f"- {item.text}"
 
         elif item.label==DocItemLabel.TABLE:
             text=item.export_to_markdown(doc=doc) # we extract the table as markdown
@@ -320,7 +317,7 @@ async def startup(ctx):
 
     ctx["s3_client"]=s3_client
 
-    ctx["file_storage"]:IFileStorage=ObjectStorage(s3_client)
+    ctx["file_storage"]=ObjectStorage(s3_client)
     
     
 async def shutdown(ctx):

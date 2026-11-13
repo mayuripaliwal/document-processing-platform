@@ -59,7 +59,7 @@ class IFileStorage(ABC):
         pass
 
     @abstractmethod
-    def get(self, storage_key:str)->BinaryIO | None:
+    def get(self, storage_key:str)->BytesIO | None:
         """- Returns file object.
         - If storage_key is invalid, raises Value Error
         - If not found, returns None
@@ -124,8 +124,8 @@ class LocalStorage(IFileStorage):
         destination=self.upload_dir/storage_key
         destination.unlink(missing_ok=True)
 
-    def get(self, storage_key:str)->BinaryIO | None:
-        """- Returns BinaryIO object from local storage for a given storage_key
+    def get(self, storage_key:str)->BytesIO | None:
+        """- Returns BytesIO object from local storage for a given storage_key
         - If storage_key is invalid, raises Value Error
         - Returns None when not found
         """
@@ -138,7 +138,8 @@ class LocalStorage(IFileStorage):
         if not destination.is_file():
             return None
 
-        return destination.open("rb")
+        with destination.open("rb") as file:
+            return BytesIO(file.read())
 
 class ObjectStorage(IFileStorage):
     """
@@ -193,8 +194,8 @@ class ObjectStorage(IFileStorage):
         )
 
 
-    def get(self, storage_key:str)->BinaryIO | None:
-        """- Returns BinaryIO object from object storage for a given storage_key
+    def get(self, storage_key:str)->BytesIO | None:
+        """- Returns BytesIO object from object storage for a given storage_key
         - If storage_key is invalid, raises Value Error
         - Returns None when file not found
         """

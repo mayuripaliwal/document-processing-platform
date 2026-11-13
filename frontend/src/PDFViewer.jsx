@@ -11,17 +11,39 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
     const [numPages, setNumPages]=useState(null);
     const [goToPage, setGoToPage]=useState(1);
+    const [loadError, setLoadError]=useState("");
     useEffect(()=>{
         setGoToPage(String(pageNumber))
     },[pageNumber]);
     return (
+        <>
         <div className="w-full">
+            
             <Document
             file={{url:fileUrl,
                 withCredentials:true
             }}
             onLoadSuccess={({numPages})=>setNumPages(numPages)}
-            onLoadError={(error)=>console.error("PDF Loading failed: ",error)}
+            onLoadError={(error)=>{
+                setLoadError(error.status);
+            }}
+            suspense={false}
+            loading={
+                <div className="mx-auto">
+                    <p
+                    className="text-center mt-4"
+                    >
+                        Loading document...
+                    </p>
+                </div>
+            }
+            error={
+                <div className="mx-auto text-center mt-4">
+                    {loadError===404 && "File not found."}
+                    {loadError===500 && "Unable to retrieve the document."}
+                    {loadError===401 && "Please log in to view this document."}
+                </div>
+            }
             >
                 <div
                 className="flex items-center gap-4 justify-center"
@@ -69,5 +91,6 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
                 
             </Document>
         </div>
+        </>
     )
 }

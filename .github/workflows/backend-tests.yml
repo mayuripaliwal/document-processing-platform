@@ -42,8 +42,8 @@ jobs:
 
       SUPABASE_ACCESS_KEY_ID: your-supabase-access-key-id
       SUPABASE_SECRET_ACCESS_KEY: your-supabase-secret-access-key
-      SUPABASE_S3_ENDPOINT: your-supabase-s3-endpoint
-      SUPABASE_S3_REGION: your-supabase-s3-region
+      SUPABASE_S3_ENDPOINT: https://example.supabase.co/storage/v1/s3
+      SUPABASE_S3_REGION: ap-south-1
       PYTHONPATH: .
     
     steps:

@@ -21,3 +21,6 @@ boto3==1.44.1
 
 python-multipart==0.0.32
 python-dotenv==1.2.4
+
+pydantic-settings==2.16.1
+pydantic_core==2.46.5

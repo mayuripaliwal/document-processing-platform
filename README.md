@@ -9,7 +9,7 @@
 |Database and ORM| PostgreSQL, SQLAlchemy, Alembic|
 |Vector Search| pgvector extension |
 |Document Storage|Supabase Storage (S3-compatible API) + boto3 |
-|Document Processing (Text and meta data extraction)| Docling|
+|Document Processing (Text and meta data extraction)| PyMuPDF4LLM|
 |Text Chunking| LangChain `RecursiveCharacterTextSplitter`|
 |Embedding Model| Sentence Transformers (`all-MiniLM-L6-v2`)|
 |LLM Integration| Groq API|

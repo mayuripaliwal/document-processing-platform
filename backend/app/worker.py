@@ -1,6 +1,5 @@
 # Background worker for processing an uploaded document
 from arq.connections import RedisSettings
-from docling.document_converter import DocumentConverter
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk, DocumentStatus
 from sqlalchemy import select, update, text
@@ -11,20 +10,23 @@ from app.embeddings import load_embedding_model
 import logging
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from docling_core.types.doc import DocItemLabel
-from app.storage import ObjectStorage, IFileStorage, LocalStorage
+from app.storage import ObjectStorage, IFileStorage, LocalStorage, FILE_STORAGE_DIR
 from typing import BinaryIO
 import boto3
 import os
 from dotenv import load_dotenv
-from docling.datamodel.base_models import DocumentStream
 from fastapi import FastAPI
 from arq.worker import create_worker
 from contextlib import asynccontextmanager
+import re
+import pymupdf
+import pymupdf4llm
 
 load_dotenv()
 
 REDIS_URL=os.environ["REDIS_URL"]
+
+IS_PRODUCTION=True if os.environ["ENVIRONMENT"]=="production" else False
 
 logger=logging.getLogger(__name__)
 
@@ -82,44 +84,37 @@ def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
     """
     Returns a list of LangchainDocument objects with text and metadata from the given PDF file.
     """
-    doc=ctx["document_converter"].convert(DocumentStream(
-        name="document.pdf",
-        stream=file
-    )).document
-
-    current_section=None
+    file.seek(0)
+    pdf_bytes=file.read()
     documents=[]
+    first_section=None
+    
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as pdf:
+        pages=pymupdf4llm.to_markdown(
+            pdf,
+            page_chunks=True
+        )
 
-    for item, level in doc.iterate_items():
-        if item.label==DocItemLabel.TABLE:
-            print("Table:")
-            print(item.export_to_markdown(doc=doc))
-            
-        if item.label==DocItemLabel.SECTION_HEADER:
-            current_section=item.text
-            continue
+        for index, page in enumerate(pages):
+            text=page["text"]
+            if not text or not text.strip():
+                continue
 
-        elif item.label == DocItemLabel.TEXT:
-            text=item.text
+            headings=re.findall(
+                r"^#{1,6}\s+(.+)$",
+                text,
+                re.MULTILINE
+            )
+            if headings:
+                first_section=headings[0].strip()
 
-        elif item.label==DocItemLabel.LIST_ITEM:
-            text=f"- {item.text}"
-
-        elif item.label==DocItemLabel.TABLE:
-            text=item.export_to_markdown(doc=doc) # we extract the table as markdown
-        else:
-            continue
-
-        if not text or not text.strip() or not item.prov:
-            continue
-
-        documents.append(LangchainDocument(
-            page_content=text,
-            metadata={
-                "page_no":item.prov[0].page_no,
-                "section_title":current_section
-            }
-        ))
+            documents.append(LangchainDocument(
+                page_content=text,
+                metadata={
+                    "page_no":index+1,
+                    "section_title":first_section
+                }
+            ))
 
     return documents
 
@@ -334,32 +329,29 @@ async def startup(ctx):
     
     logger.info("Started ARQ Worker")
     
-    ctx["embedding_model"]=load_embedding_model()
+    ctx["embedding_model"]=await asyncio.to_thread(load_embedding_model)
 
     logger.info("Embedding model loaded")
 
-    ctx["document_converter"]=DocumentConverter()
+    if IS_PRODUCTION:
+        # s3_client for ObjectStorage
+        s3_client=boto3.client(
+            "s3",
+            endpoint_url=os.environ["SUPABASE_S3_ENDPOINT"],
+            region_name=os.environ["SUPABASE_S3_REGION"],
+            aws_access_key_id=os.environ["SUPABASE_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["SUPABASE_SECRET_ACCESS_KEY"]
+        )
 
-    logger.info("Document converter loaded")
-
-    # s3_client for ObjectStorage
-    s3_client=boto3.client(
-        "s3",
-        endpoint_url=os.environ["SUPABASE_S3_ENDPOINT"],
-        region_name=os.environ["SUPABASE_S3_REGION"],
-        aws_access_key_id=os.environ["SUPABASE_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["SUPABASE_SECRET_ACCESS_KEY"]
-    )
-
-    ctx["s3_client"]=s3_client
-
-    ctx["file_storage"]=ObjectStorage(s3_client)
+        ctx["s3_client"]=s3_client
+        ctx["file_storage"]=ObjectStorage(s3_client)
+    else:
+        ctx["file_storage"]= LocalStorage(FILE_STORAGE_DIR)
     
     
 async def shutdown(ctx):
-    s3_client=ctx.get("s3_client")
-
-    s3_client.close()
+    if IS_PRODUCTION:
+        ctx["s3_client"].close()
 
     logger.info("Stopped ARQ Worker")
 

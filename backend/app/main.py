@@ -22,7 +22,7 @@ import json
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from app.storage import FileTooLargeError, InvalidFileNameError, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage, ObjectStorage
+from app.storage import FileTooLargeError, InvalidFileNameError, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage, ObjectStorage, FILE_STORAGE_DIR
 import boto3
 from typing import BinaryIO
 print("Imported all modules", flush=True)
@@ -36,8 +36,6 @@ JWT_SECRET_KEY=os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM="HS256"
 
 IS_PRODUCTION=True if os.environ["ENVIRONMENT"]=="production" else False
-
-FILE_STORAGE_DIR=Path("uploads")
 
 GROQ_API_KEY=os.environ["GROQ_API_KEY"]
 GROQ_MODEL=os.environ["GROQ_MODEL"]
@@ -114,7 +112,7 @@ async def lifespan(app:FastAPI):
             aws_secret_access_key=os.environ["SUPABASE_SECRET_ACCESS_KEY"]
         )
 
-        app.state.file_storage=ObjectStorage(s3_client)
+        app.state.file_storage=ObjectStorage(s3_client) if IS_PRODUCTION else LocalStorage(FILE_STORAGE_DIR)
         yield
     finally:
         if s3_client is not None:

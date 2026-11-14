@@ -9,6 +9,8 @@ from io import BytesIO
 MAX_FILE_SIZE_BYTES=10485760
 MAX_FILE_READ_BYTES=1048576
 
+FILE_STORAGE_DIR=Path("uploads")
+
 class FileTooLargeError(Exception):
     """
     File size exceeds maximum allowed size

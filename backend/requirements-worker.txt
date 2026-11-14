@@ -26,3 +26,8 @@ python-dotenv==1.2.4
 greenlet==3.5.6
 psycopg-binary==3.3.6
 psycopg-pool==3.3.3
+
+pymupdf==2.1
+pymupdf4llm==2.1
+pymupdf_layout==2.1
+pypdfium2==5.14.0

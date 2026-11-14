@@ -1,7 +1,6 @@
 # Background worker for processing an uploaded document
 from arq.connections import RedisSettings
 from docling.document_converter import DocumentConverter
-from pathlib import Path
 from app.database import SessionLocal
 from app.models import Document, DocumentChunk, DocumentStatus
 from sqlalchemy import select, update, text
@@ -19,7 +18,6 @@ import boto3
 import os
 from dotenv import load_dotenv
 from docling.datamodel.base_models import DocumentStream
-from app.main import FILE_STORAGE_DIR
 from fastapi import FastAPI
 from arq.worker import create_worker
 from contextlib import asynccontextmanager
@@ -278,7 +276,8 @@ async def process_document(ctx,document_id:int):
         
         try:
             logger.info("Extracting embeddings for document_id: %s", document_id)
-            embeddings=await asyncio.to_thread(lambda:list(model.encode(chunk_texts)))
+            embeddings=await asyncio.to_thread(lambda:list(model.embed(chunk_texts)))
+            embeddings=[embedding.tolist() for embedding in embeddings]
         except Exception:
             logger.exception("Failed to extract embeddings for document_id: %s", document_id)
             raise
@@ -288,7 +287,7 @@ async def process_document(ctx,document_id:int):
         # 10. Save chunks and embeddings in DB
         
         try:
-            await save_document_chunk_details(document_id,chunks, embeddings.tolist())
+            await save_document_chunk_details(document_id,chunks, embeddings)
         except Exception:
             logger.exception("Failed to save chunks and embeddings for document_id: %s", document_id)
             raise

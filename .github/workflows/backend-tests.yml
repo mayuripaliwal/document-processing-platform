@@ -1,0 +1,65 @@
+name: Backend Tests
+
+on:
+  push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+    
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+
+      JWT_SECRET_KEY: your-jwt-secret-key
+
+      ENVIRONMENT: development
+
+      GROQ_API_KEY: your-groq-api-key
+      GROQ_MODEL: "openai/gpt-oss-20b"
+
+      FRONTEND_URL: http://localhost:5173
+
+      DAILY_USER_USAGE_QUOTA_SEARCH_API: "10"
+
+      SUPABASE_ACCESS_KEY_ID: your-supabase-access-key-id
+      SUPABASE_SECRET_ACCESS_KEY: your-supabase-secret-access-key
+      SUPABASE_S3_ENDPOINT: your-supabase-s3-endpoint
+      SUPABASE_S3_REGION: your-supabase-s3-region
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: "3.11"
+      
+      - name: Install Dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Enable pgvector
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS vector";
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Run pytest
+        run: pytest
+
+        

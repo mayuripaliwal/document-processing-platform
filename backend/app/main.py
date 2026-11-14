@@ -1,6 +1,5 @@
 print("Starting module imports", flush=True)
 from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File, Query
-import httpx
 from app.schemas import UserAccount
 from argon2 import PasswordHasher
 from fastapi.concurrency import run_in_threadpool
@@ -8,7 +7,7 @@ from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Document, DocumentStatus
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, delete, func, text
+from sqlalchemy import select, delete, text
 from argon2.exceptions import VerifyMismatchError
 import jwt
 import os
@@ -17,7 +16,6 @@ from jwt import InvalidTokenError, ExpiredSignatureError
 from pathlib import Path
 from contextlib import asynccontextmanager
 from arq.connections import create_pool, RedisSettings
-import time
 from app.embeddings import load_embedding_model
 from groq import AsyncGroq
 import json
@@ -702,7 +700,7 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
     - DB helper to get answer for a search query 
     - Returns None when could not generate an answer
     """
-    query_embedding=await run_in_threadpool(embedding_model.encode, query)
+    query_embedding=await run_in_threadpool(lambda:next(embedding_model.query_embed(query)))
 
     query_embedding=query_embedding.tolist()
 

@@ -278,7 +278,7 @@ async def process_document(ctx,document_id:int):
         
         try:
             logger.info("Extracting embeddings for document_id: %s", document_id)
-            embeddings=await asyncio.to_thread(model.encode, chunk_texts)
+            embeddings=await asyncio.to_thread(lambda:list(model.encode(chunk_texts)))
         except Exception:
             logger.exception("Failed to extract embeddings for document_id: %s", document_id)
             raise

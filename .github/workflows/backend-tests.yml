@@ -45,6 +45,7 @@ jobs:
       SUPABASE_S3_ENDPOINT: https://example.supabase.co/storage/v1/s3
       SUPABASE_S3_REGION: ap-south-1
       PYTHONPATH: .
+      REDIS_URL: redis://127.0.0.1:6379
     
     steps:
       - name: Checkout repository

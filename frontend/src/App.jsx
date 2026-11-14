@@ -9,6 +9,7 @@ import DashboardLayout from "./DashboardLayout";
 import {BrowserRouter, Routes, Route} from "react-router-dom";
 import {AUTH_STATUSES} from "./AuthConfig";
 import SingleDocument from "./SingleDocument";
+import { Analytics } from "@vercel/analytics/next"
 
 function App() {
   const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
@@ -42,6 +43,7 @@ function App() {
   return (
     
     <>
+    <Analytics/>
     <BrowserRouter>
     
     {authStatus === AUTH_STATUSES.CHECKING && ( 

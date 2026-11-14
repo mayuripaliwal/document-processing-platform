@@ -272,7 +272,7 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
         value=jwt_access_token,
         httponly=True,
         secure=True if IS_PRODUCTION else False,
-        samesite="lax"
+        samesite="none" if IS_PRODUCTION else "lax",
     )
 
     return {

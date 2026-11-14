@@ -1,3 +1,4 @@
+# Background worker for processing an uploaded document
 from arq.connections import RedisSettings
 from docling.document_converter import DocumentConverter
 from pathlib import Path
@@ -19,19 +20,51 @@ import os
 from dotenv import load_dotenv
 from docling.datamodel.base_models import DocumentStream
 from app.main import FILE_STORAGE_DIR
+from fastapi import FastAPI
+from arq.worker import create_worker
+from contextlib import asynccontextmanager
+
 load_dotenv()
+
+REDIS_URL=os.environ["REDIS_URL"]
 
 logger=logging.getLogger(__name__)
 
 if sys.platform=="win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-REDIS_SETTINGS=RedisSettings(
-    host="127.0.0.1",
-    port=6379
-)
-
 MAX_JOB_TRIES=3
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # start the worker
+    worker=create_worker(
+        WorkerSettings,
+        poll_delay=10,
+        health_check_interval=300
+    )
+    app.state.worker_task=asyncio.create_task(
+        worker.async_run()
+    )
+    try:
+        yield
+    finally:
+        app.state.worker_task.cancel()
+
+        try:
+            await app.state.worker_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await worker.close()
+
+app=FastAPI(lifespan=lifespan)
+
+@app.get('/')
+async def home():
+    return {
+        "status":"ok"
+    }
 
 async def extract_document_storage_key(document_id:int)->str | None:
     """
@@ -210,8 +243,6 @@ async def process_document(ctx,document_id:int):
             extracted_text.append(document.page_content)
 
         extracted_text="\n\n".join(extracted_text)
-        if not extracted_text.strip():
-            return
 
         logger.info("Extracted text for document_id: %s", document_id)
 
@@ -273,10 +304,16 @@ async def process_document(ctx,document_id:int):
 
     except asyncio.CancelledError:
         logger.exception("Processing failed for document_id=%s, attempt=%s", document_id, ctx["job_try"])
-        await updateDocumentStatus(
-            document_id,
-            DocumentStatus.FAILED
-        )
+        raise
+
+    except Exception:
+        logger.exception("Processing failed for document_id=%s, attempt=%s", document_id, ctx["job_try"])
+        if ctx["job_try"]==MAX_JOB_TRIES:
+            await updateDocumentStatus(
+                document_id,
+                DocumentStatus.FAILED
+            )
+        raise
 
 
 async def updateDocumentStatus(document_id:int, status:DocumentStatus):
@@ -331,6 +368,8 @@ class WorkerSettings:
     functions=[process_document]
     on_startup=startup
     on_shutdown=shutdown
-    redis_settings=REDIS_SETTINGS
+    redis_settings=RedisSettings.from_dsn(
+        REDIS_URL
+    )
     job_timeout = 10 * 60
     max_tries=MAX_JOB_TRIES

@@ -1,3 +1,4 @@
+print("Starting module imports", flush=True)
 from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File, Query
 import httpx
 from app.schemas import UserAccount
@@ -26,14 +27,12 @@ from fastapi.responses import StreamingResponse
 from app.storage import FileTooLargeError, InvalidFileNameError, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage, ObjectStorage
 import boto3
 from typing import BinaryIO
+print("Imported all modules", flush=True)
 
 logger=logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
 
-REDIS_SETTINGS=RedisSettings(
-    host="127.0.0.1",
-    port=6379
-)
+REDIS_URL=os.environ["REDIS_URL"]
 
 JWT_SECRET_KEY=os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM="HS256"
@@ -97,13 +96,18 @@ DAILY_USER_USAGE_QUOTA_SCRIPT="""
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
-    redis_pool=await create_pool(REDIS_SETTINGS)
+    logger.info("Initializing redis pool...")
+    redis_pool=await create_pool(RedisSettings.from_dsn(REDIS_URL))
     app.state.redis_pool=redis_pool
+    logger.info("Initializing groq client...")
     app.state.groq_client=AsyncGroq(api_key=GROQ_API_KEY)
 
+    s3_client=None
     try:
+        logger.info("Initializing embedding model...")
         app.state.embedding_model=await run_in_threadpool(load_embedding_model)
         # s3_client for ObjectStorage
+        logger.info("Initializing s3 client...")
         s3_client=boto3.client(
             "s3",
             endpoint_url=os.environ["SUPABASE_S3_ENDPOINT"],

@@ -115,7 +115,8 @@ async def lifespan(app:FastAPI):
         app.state.file_storage=ObjectStorage(s3_client)
         yield
     finally:
-        s3_client.close()
+        if s3_client is not None:
+            s3_client.close()
         await redis_pool.aclose()
         await app.state.groq_client.close()
 

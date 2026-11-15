@@ -9,7 +9,6 @@ import {
 import {AUTH_STATUSES} from "./AuthConfig";
 
 const navigation = [
-  { name: 'Dashboard', linkto: '/dashboard' },
   { name: 'My Documents', linkto: '/documents'}
 ]
 

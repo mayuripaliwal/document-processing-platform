@@ -1,4 +1,6 @@
 # Document Processing Platform
+[![CI](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml)
+![GitHub License](https://img.shields.io/github/license/mayuripaliwal/document-processing-platform)
 
 ## Architecture Diagram - Document Processing
 

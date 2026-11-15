@@ -3,7 +3,6 @@ import './App.css'
 import LandingPage from "./LandingPage";
 import Signup from "./Signup";
 import Signin from "./Signin";
-import Dashboard from "./Dashboard";
 import Documents from "./Documents";
 import DashboardLayout from "./DashboardLayout";
 import {BrowserRouter, Routes, Route} from "react-router-dom";
@@ -58,13 +57,12 @@ function App() {
       {authStatus === AUTH_STATUSES.LOGGED_IN && (
         <>
         <Route element={<DashboardLayout setAuthStatus={setAuthStatus}/>}>
-          <Route path="/dashboard" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
           <Route path="/documents" element={<Documents setAuthStatus={setAuthStatus}/>}></Route>
           <Route path="/documents/:documentId" element={<SingleDocument setAuthStatus={setAuthStatus}/>}></Route>
-          <Route path="/*" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
-          <Route path="/" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
+          <Route path="/*" element={<Documents setAuthStatus={setAuthStatus}/>}></Route>
+          <Route path="/" element={<Documents setAuthStatus={setAuthStatus}/>}></Route>
         </Route>
-        <Route path="/*" element={<Dashboard setAuthStatus={setAuthStatus}/>}></Route>
+        <Route path="/*" element={<Documents setAuthStatus={setAuthStatus}/>}></Route>
         </>
       )}
       {authStatus === AUTH_STATUSES.LOGGED_OUT && (

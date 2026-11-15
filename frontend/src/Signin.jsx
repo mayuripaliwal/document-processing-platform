@@ -49,7 +49,7 @@ export default function Signin({setAuthStatus}) {
             else{
                 {/**Sign up successful */}
                 setAuthStatus(AUTH_STATUSES.LOGGED_IN);
-                navigate("/dashboard");
+                navigate("/documents");
             }
         }
         catch(error){

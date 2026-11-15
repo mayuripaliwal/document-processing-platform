@@ -89,7 +89,13 @@ export default function Sidebar({setAuthStatus}) {
                         ))}
                       </ul>
                     </li>
-                    <li>
+                    <li className="-mx-6 mt-auto">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-x-4 px-6 py-3 text-sm/6 font-semibold text-gray-900 hover:bg-gray-50"
+                      >
+                          Logout
+                      </button>
                     </li>
                   </ul>
                 </nav>

@@ -2,6 +2,11 @@
 [![CI](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml)
 ![GitHub License](https://img.shields.io/github/license/mayuripaliwal/document-processing-platform)
 
+A full-stack application for uploading, searching, and querying PDF documents.
+
+## Link
+[Try Query PDF](https://querypdf.vercel.app/)
+
 ## Architecture Diagram - Document Processing
 
 ```mermaid

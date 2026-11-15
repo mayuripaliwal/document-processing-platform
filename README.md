@@ -1,5 +1,28 @@
 # Document Processing Platform
 
+## Architecture Diagram - Document Processing
+
+```mermaid
+flowchart LR
+    FE[Frontend<br/>React]
+    BE[Backend<br/>FastAPI]
+    U([User])
+    W[Background Worker<br/>ARQ]
+    R[(Redis)]
+    OS[(Supabase<br/>Object Storage)]
+    U <--> FE
+    FE <-->|HTTP Requests/Responses| BE
+
+    BE --> |Store document metadata|DB[(PostgreSQL<br/>Database)]
+    BE -->|Store uploaded document| OS
+
+    BE -->|Enqueue process_document|R
+    R-->|Consume job process_document|W
+
+    W -->|Store extracted text, chunks, embeddings and metadata| DB
+    OS --> |Retrieve uploaded document|W
+```
+
 ## Tech Stack
 
 |Category|Tools Used|

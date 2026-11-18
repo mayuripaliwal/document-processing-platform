@@ -20,6 +20,8 @@ export default function Sidebar({setAuthStatus}) {
   const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  const [errorMessage, setErrorMessage]=useState("");
+
   async function handleLogout(){
     try{
       const response=await fetch(`${BACKEND_URL}/logout`,{
@@ -33,12 +35,15 @@ export default function Sidebar({setAuthStatus}) {
       if (response.ok){
         setAuthStatus(AUTH_STATUSES.LOGGED_OUT);
       }
+      else if (response.status===401){
+        setAuthStatus(AUTH_STATUSES.LOGGED_OUT);
+      }
       else{
-        console.log(response);
+        setErrorMessage("Something went wrong. Please try again.");
       }
     }
     catch(error){
-      console.log(error);
+      setErrorMessage("Unable to connect to the server.");
     }
   }
 
@@ -96,6 +101,11 @@ export default function Sidebar({setAuthStatus}) {
                       >
                           Logout
                       </button>
+                      <p
+                      className="text-center text-red-600 text-xs"
+                      >
+                        {errorMessage}
+                      </p>
                     </li>
                   </ul>
                 </nav>

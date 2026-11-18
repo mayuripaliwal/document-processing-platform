@@ -1,4 +1,3 @@
-print("Starting module imports", flush=True)
 from fastapi import FastAPI, HTTPException, status, Depends, Response, Request, UploadFile, File, Query
 from app.schemas import UserAccount
 from argon2 import PasswordHasher
@@ -25,7 +24,6 @@ from fastapi.responses import StreamingResponse
 from app.storage import FileTooLargeError, InvalidFileNameError, MAX_FILE_READ_BYTES, IFileStorage, LocalStorage, ObjectStorage, FILE_STORAGE_DIR
 import boto3
 from typing import BinaryIO
-print("Imported all modules", flush=True)
 
 logger=logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(funcName)s: %(message)s",level=logging.INFO)
@@ -280,8 +278,14 @@ async def login(user:UserAccount,response:Response, db:AsyncSession=Depends(get_
     }
 
 @app.post('/logout')
-async def logout(response:Response, user_id:int=Depends(get_user)):
-    response.delete_cookie(key="access_token")
+async def logout(response:Response):
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        secure=True if IS_PRODUCTION else False,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+    )
     return {
         "message":"Successfully logged out."
     }

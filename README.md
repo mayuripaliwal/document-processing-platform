@@ -57,7 +57,7 @@ flowchart LR
 |`GET`|`/auth`|No|Checks if user is logged in or not|
 |`POST`|`/signup`|No| Creates a new user account|
 |`POST`|`/login`|No|Authenticate a user and set httponly cookie `access_token` for access to protected endpoints|
-|`POST`|`/logout`|Yes|Log out the user by clearing `access_token` cookie|
+|`POST`|`/logout`|No|Log out the user by clearing `access_token` cookie|
 |`POST`|`/documents`|Yes|Uploads a document for a user|
 |`GET`|`/documents`|Yes|Fetches all documents for a given user|
 |`DELETE`|`/documents/{document_id}`|Yes| Deletes the document with the given `document_id`|

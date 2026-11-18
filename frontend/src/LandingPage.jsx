@@ -1,20 +1,36 @@
-import { ChevronRightIcon } from '@heroicons/react/20/solid'
+import { ArrowRightIcon } from '@heroicons/react/24/outline'
 import {Link} from "react-router-dom";
 
 export default function LandingPage() {
   return (
+    <>
     <div className="relative isolate overflow-hidden bg-white">
+      <div className="relative z-10 bg-white/10 backdrop-blur-[0.7px] flex items-center justify-between px-10 py-8">
+      <Link
+        to="/"
+        className="text-xl text-gray-900"
+      >
+        Query<span className="text-blue-600">PDF</span>
+      </Link>
+      <Link
+        to="/login"
+        className="flex gap-1 justify items-center rounded-md text-sm font-semibold text-gray-900"
+      >
+        Log in
+        <span aria-hidden="true">&rarr;</span>
+      </Link>
+    </div>
       <svg
         aria-hidden="true"
-        className="absolute inset-0 -z-10 size-full mask-[radial-gradient(100%_100%_at_top_right,white,transparent)] stroke-gray-300"
+        className="absolute inset-0 z-0 size-full mask-[radial-gradient(100%_100%_at_top_right,white,transparent)] stroke-blue-600"
       >
         <defs>
           <pattern
             x="50%"
             y={-1}
             id="0787a7c5-978c-4f66-83c7-11c213f99cb7"
-            width={200}
-            height={200}
+            width={50}
+            height={50}
             patternUnits="userSpaceOnUse"
           >
             <path d="M.5 200V.5H200" fill="none" />
@@ -23,10 +39,12 @@ export default function LandingPage() {
         <rect fill="url(#0787a7c5-978c-4f66-83c7-11c213f99cb7)" width="100%" height="100%" strokeWidth={0} />
       </svg>
       <div className="mx-auto max-w-7xl px-6 pt-10 pb-24 sm:pb-32 lg:flex lg:px-8 lg:py-40">
+        
         <div className="mx-auto max-w-2xl lg:mx-0 lg:shrink-0 lg:pt-8">
-          <div className="mt-24 sm:mt-32 lg:mt-16">
+          <div className="mt-3 sm:mt-4 lg:mt-2">
+            
           </div>
-          <h1 className="mt-10 text-5xl font-semibold tracking-tight text-pretty text-gray-900 sm:text-7xl">
+          <h1 className="text-5xl font-semibold tracking-tight text-pretty text-gray-900 sm:text-7xl">
             Ask questions from your personal knowledge base
           </h1>
           <p className="mt-8 text-lg font-medium text-pretty text-gray-500 sm:text-xl/8">
@@ -35,7 +53,7 @@ export default function LandingPage() {
           <div className="mt-10 flex items-center gap-x-6">
             <Link
               to="/signup"
-              className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="rounded-md bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
               Get started
             </Link>
@@ -45,10 +63,12 @@ export default function LandingPage() {
           <div className="max-w-3xl flex-none sm:max-w-5xl lg:max-w-none">
             <div className="-m-2 rounded-xl bg-gray-900/5 p-2 ring-1 ring-gray-900/10 ring-inset lg:-m-4 lg:rounded-2xl lg:p-4">
               {/**TODO: Add screenshot here */}
+              
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   )
 }

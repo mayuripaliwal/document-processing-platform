@@ -66,7 +66,7 @@ export default function Sidebar({setAuthStatus}) {
               </TransitionChild>
               <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-2">
                 <div className="relative flex h-16 shrink-0 items-center">
-                  <p>Document Processing Platform</p>
+                  <p>QueryPDF</p>
                 </div>
                 <nav className="relative flex flex-1 flex-col">
                   <ul role="list" className="flex flex-1 flex-col gap-y-7">
@@ -108,7 +108,7 @@ export default function Sidebar({setAuthStatus}) {
         <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
           <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-6">
             <div className="flex h-16 shrink-0 items-center">
-              <p>Document Processing Platform</p>
+              <p>QueryPDF</p>
             </div>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex flex-1 flex-col gap-y-7">

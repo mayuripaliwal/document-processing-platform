@@ -17,6 +17,7 @@ argon2-cffi==25.1.0
 PyJWT==2.15.1
 
 groq==1.7.0
+openai==1.109.1
 boto3==1.44.1
 
 python-multipart==0.0.32

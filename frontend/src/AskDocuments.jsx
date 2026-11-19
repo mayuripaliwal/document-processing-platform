@@ -40,6 +40,10 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
                     setSearchError("We could not find what you were looking for.");
                     setAnswer(null);
                 }
+                else if (response.status===429){
+                    setSearchError("Daily usage quota exceeded. Please try again after usage limit resets.");
+                    setAnswer(null);
+                }
                 else{
                     setSearchError("Something went wrong. Please try again.")
                     setAnswer(null);
@@ -105,7 +109,7 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
         </form>
         {searchError && !loading && (
             <p
-            className="text-red-600 text-center text-sm"
+            className="mt-4 text-red-600 text-center text-sm"
             >
                 {searchError}
             </p>

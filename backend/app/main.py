@@ -16,7 +16,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from arq.connections import create_pool, RedisSettings
 from app.embeddings import load_embedding_model
-from groq import AsyncGroq
+from openai import AsyncOpenAI
 import json
 import logging
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,7 +94,7 @@ async def lifespan(app:FastAPI):
     redis_pool=await create_pool(RedisSettings.from_dsn(REDIS_URL))
     app.state.redis_pool=redis_pool
     logger.info("Initializing groq client...")
-    app.state.groq_client=AsyncGroq(api_key=GROQ_API_KEY)
+    app.state.groq_client=AsyncOpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
 
     s3_client=None
     try:

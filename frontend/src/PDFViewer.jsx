@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import {useState, useEffect, useRef} from "react";
 import {Document, Page, pdfjs} from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -17,7 +17,9 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
     },[pageNumber]);
     return (
         <>
-        <div className="w-full">
+        <div 
+        className="flex w-full min-w-0"
+        >
             
             <Document
             file={{url:fileUrl,
@@ -86,7 +88,6 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
                 </div>
                 <Page 
                 pageNumber={pageNumber}
-                width={800}
                 ></Page>
                 
             </Document>

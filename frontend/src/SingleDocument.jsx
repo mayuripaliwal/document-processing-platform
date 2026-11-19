@@ -10,10 +10,10 @@ export default function SingleDocument({setAuthStatus}){
     const [pageNumber, setPageNumber]=useState(1);
     return (
         <div
-        className="flex w-full"
+        className="flex w-full min-w-0"
         >
             <div
-            className="min-w-0 flex-[3]"
+            className="min-w-0 flex-[2] overflow-auto"
             >
                 <PDFViewer fileUrl={fileUrl} pageNumber={pageNumber} setPageNumber={setPageNumber}/>
             </div>

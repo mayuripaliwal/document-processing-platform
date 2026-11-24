@@ -88,33 +88,33 @@ def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
     pdf_bytes=file.read()
     documents=[]
     first_section=None
-    
+
     with pymupdf.open(stream=pdf_bytes, filetype="pdf") as pdf:
         pages=pymupdf4llm.to_markdown(
             pdf,
             page_chunks=True
         )
 
-        for index, page in enumerate(pages):
-            text=page["text"]
-            if not text or not text.strip():
-                continue
+    for index, page in enumerate(pages):
+        text=page["text"]
+        if not text or not text.strip():
+            continue
 
-            headings=re.findall(
-                r"^#{1,6}\s+(.+)$",
-                text,
-                re.MULTILINE
-            )
-            if headings:
-                first_section=headings[0].strip()
+        headings=re.findall(
+            r"^#{1,6}\s+(.+)$",
+            text,
+            re.MULTILINE
+        )
+        if headings:
+            first_section=headings[0].strip()
 
-            documents.append(LangchainDocument(
-                page_content=text,
-                metadata={
-                    "page_no":index+1,
-                    "section_title":first_section
-                }
-            ))
+        documents.append(LangchainDocument(
+            page_content=text,
+            metadata={
+                "page_no":index+1,
+                "section_title":first_section
+            }
+        ))
 
     return documents
 
@@ -270,8 +270,8 @@ async def process_document(ctx,document_id:int):
         # 9. Generate embeddings for each chunk text
         
         try:
-            logger.info("Extracting embeddings for document_id: %s", document_id)
-            embeddings=await asyncio.to_thread(lambda:list(model.embed(chunk_texts)))
+            logger.info("Extracting embeddings for document_id: %s with %s chunks", document_id, len(chunk_texts))
+            embeddings=await asyncio.to_thread(lambda:list(model.embed(chunk_texts, batch_size=8)))
             embeddings=[embedding.tolist() for embedding in embeddings]
         except Exception:
             logger.exception("Failed to extract embeddings for document_id: %s", document_id)
@@ -362,5 +362,5 @@ class WorkerSettings:
     redis_settings=RedisSettings.from_dsn(
         REDIS_URL
     )
-    job_timeout = 10 * 60
+    job_timeout = 30 * 60
     max_tries=MAX_JOB_TRIES

@@ -706,28 +706,69 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
 
     query_embedding=query_embedding.tolist()
 
+    rrf_rank_constant=60
+
     result=await db.execute(
         text(
             """
+            with semantic_chunks as (
+                SELECT dc.id as chunk_id,
+                row_number() over (
+                    order by dc.embedding <=>  CAST(:query_embedding as vector) ASC,
+                    dc.id ASC
+                ) as rn
+                FROM document_chunks as dc
+                JOIN documents as d
+                ON d.id=dc.document_id
+                WHERE d.user_id=:user_id 
+                AND d.id=:document_id 
+                AND d.document_status=:status
+                ORDER BY rn ASC
+                LIMIT 10
+            ),
+            text_chunks as (
+                SELECT dc.id as chunk_id,
+                row_number() over (
+                    order by ts_rank (
+                        to_tsvector('english',dc.content),
+                        websearch_to_tsquery('english',:query)
+                    ) DESC,
+                    dc.id ASC
+                ) as rn
+                FROM document_chunks as dc
+                JOIN documents as d
+                ON d.id=dc.document_id
+                WHERE d.user_id=:user_id 
+                AND d.id=:document_id 
+                AND d.document_status=:status
+                AND to_tsvector('english', dc.content)
+                @@websearch_to_tsquery('english', :query)
+                ORDER BY rn ASC
+                LIMIT 10
+            )
             SELECT
             dc.id as chunk_id,
             dc.content,
             dc.page_no,
             dc.section_title
-            FROM document_chunks as dc
-            JOIN documents as d
-            ON d.id=dc.document_id
-            WHERE d.user_id=:user_id 
-            AND d.id=:document_id 
-            AND d.document_status=:status
-            ORDER BY dc.embedding <=>  CAST(:query_embedding as vector) ASC
+
+            FROM semantic_chunks sc
+            FULL OUTER JOIN text_chunks tc
+            ON sc.chunk_id=tc.chunk_id
+
+            JOIN document_chunks dc
+            ON dc.id=coalesce(sc.chunk_id, tc.chunk_id)
+
+            ORDER BY coalesce(1.0/(rrf_rank_constant+sc.rn), 0)+coalesce(1.0/(rrf_rank_constant+tc.rn),0) DESC
             LIMIT 10
             """
         ),{
             "user_id":user_id,
             "document_id":document_id,
             "query_embedding":query_embedding,
-            "status":DocumentStatus.COMPLETED
+            "status":DocumentStatus.COMPLETED,
+            "query":query,
+            "rrf_rank_constant":rrf_rank_constant
         }
     )
 
@@ -770,7 +811,6 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
                 })
             else:
                 logger.info("LLM returned an unknown chunk citation: %s", source_id)
-                pass
         final_answer.append(
             {
                 "answer_part":answer["text"],

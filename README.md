@@ -9,6 +9,8 @@ A full-stack application for uploading, searching, and querying PDF documents.
 
 ## Demo
 
+https://github.com/user-attachments/assets/84c2a3ca-e0c9-444e-b183-75dc13ac7d64
+
 ### 1. Ask Documents
 ![Ask Documents](/frontend/public/Ask_Documents_Demo_Screenshot.png)
 

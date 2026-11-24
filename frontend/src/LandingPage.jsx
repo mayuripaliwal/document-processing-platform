@@ -168,7 +168,7 @@ export default function LandingPage() {
               {/**Demo Screenshot */}
               <img
                 alt="App screenshot"
-                src="/QueryPDF_Screenshot_Demo.png"
+                src="/QueryPDF_Demo_Screenshot.png"
                 width={2432}
                 height={1442}
                 className="h-auto w-full rounded-xl shadow-xl ring-1 ring-gray-900/10"
@@ -197,15 +197,15 @@ export default function LandingPage() {
               preload="metadata"
               playsInline
               className="h-auto w-full"
-              poster="/QueryPDF_Screenshot_Demo.png"
+              poster="/QueryPDF_Demo_Screenshot.png"
             >
-              <source src="/QueryPDF_Video_Demo.mp4" type="video/mp4" />
+              <source src="/QueryPDF_Demo_Video.mp4" type="video/mp4" />
               Your browser does not support the video element.
             </video>
           </div>
 
           <p className="mt-4 text-center text-sm text-gray-500">
-            25-second demonstration using a <a
+            23-second demonstration using a <a
             href="https://s22.q4cdn.com/513010314/files/doc_financials/2022/q4/r/MGM-Resorts-Exhibit-99.1.pdf"
             className="underline text-blue-600"
             target="_blank"

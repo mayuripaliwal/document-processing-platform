@@ -7,6 +7,14 @@ A full-stack application for uploading, searching, and querying PDF documents.
 ## Link
 [Try Query PDF](https://querypdf.vercel.app/)
 
+## Demo
+
+### 1. Ask Documents
+![Ask Documents](/frontend/public/Ask_Documents_Demo_Screenshot.png)
+
+### 2. My Documents
+![My Documents](/frontend/public/My_Documents_Demo_Screenshot.png)
+
 ## Architecture Diagram - Document Processing
 
 ```mermaid

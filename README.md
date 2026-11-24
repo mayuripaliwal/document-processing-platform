@@ -50,6 +50,14 @@ flowchart LR
 
 > Note: Document Storage supports both `ObjectStorage` as well as `LocalStorage` through the `IFileStorage` abstraction. Currently, `ObjectStorage` is used, implemented using boto3 and Supabase storage's S3 compatible API. `LocalStorage` is kept as an option for local testing.
 
+## Features
+- Upload, view and delete PDF Documents.
+- Track document processing through `UPLOADED`, `PROCESSING`, `COMPLETED`, and `FAILED` states.
+- Ask questions about PDF documents using AI-powered question-answering.
+- Get answers with validated source citations and navigate directly to the corresponding pages in the PDF viewer.
+
+> Note: Citation validation ensures that citations returned by the LLM correspond to chunks actually retrieved from the document. It does not guarantee that those chunks directly support the generated answer.
+
 ## API Endpoints
 
 |Method|Route|Authentication|Description|

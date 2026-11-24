@@ -759,7 +759,7 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
             JOIN document_chunks dc
             ON dc.id=coalesce(sc.chunk_id, tc.chunk_id)
 
-            ORDER BY coalesce(1.0/(rrf_rank_constant+sc.rn), 0)+coalesce(1.0/(rrf_rank_constant+tc.rn),0) DESC
+            ORDER BY coalesce(1.0/(:rrf_rank_constant+sc.rn), 0)+coalesce(1.0/(:rrf_rank_constant+tc.rn),0) DESC
             LIMIT 10
             """
         ),{

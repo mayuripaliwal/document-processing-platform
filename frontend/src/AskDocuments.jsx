@@ -144,7 +144,7 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
                                                 key={index}
                                                 onClick={()=> setPageNumber(Number(page_no))}
                                                 className="text-sm rounded-lg bg-blue-100 m-1 p-1 hover:bg-blue-200"
-                                                >Page: {page_no} ⋅ {section_title}
+                                                >Page: {page_no} ⋅ <ReactMarkdown remarkPlugins={[remarkGfm]} components={{p: ({children})=><span>{children}</span>}}>{section_title}</ReactMarkdown>
                                                 </button>
                                             </span>
                                         ))}

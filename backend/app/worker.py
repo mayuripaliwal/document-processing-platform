@@ -107,6 +107,7 @@ def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
         )
         if headings:
             first_section=headings[0].strip()
+            first_section=re.sub(r"</?u>","", first_section,flags=re.IGNORECASE)
 
         documents.append(LangchainDocument(
             page_content=text,

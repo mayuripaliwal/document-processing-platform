@@ -224,3 +224,4 @@ __marimo__/
 /backend/tests/test_llm.py
 
 /backend/evaluation
+/videos

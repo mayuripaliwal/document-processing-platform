@@ -16,7 +16,7 @@ class DocumentStatus(Enum):
 class Document(Base):
     """
     Schema for defining a document object
-    {`id`, `user_id`, `file_name`, `stored_file_name`, `mime_type`, `file_size`, `created_at`, `extracted_text`}
+    {`id`, `user_id`, `file_name`, `stored_file_name`, `mime_type`, `file_size`, `created_at`, `document_status`}
     """
     __tablename__="documents"
 
@@ -27,7 +27,6 @@ class Document(Base):
     mime_type:Mapped[str]=mapped_column(String(100),nullable=False)
     file_size:Mapped[int]=mapped_column(BigInteger, nullable=False)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now(),nullable=False)
-    extracted_text:Mapped[str|None]=mapped_column(Text, nullable=True)
     document_status:Mapped[DocumentStatus]=mapped_column(SQLEnum(DocumentStatus, name="document_status"), nullable=False)
 
 class User(Base):

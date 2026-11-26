@@ -36,7 +36,7 @@ flowchart LR
     BE -->|Enqueue process_document|R
     R-->|Consume job process_document|W
 
-    W -->|Store extracted text, chunks, embeddings and metadata| DB
+    W -->|Store chunks, embeddings and metadata| DB
     OS --> |Retrieve uploaded document|W
 ```
 
@@ -49,8 +49,8 @@ flowchart LR
 |Database and ORM| PostgreSQL, SQLAlchemy, Alembic|
 |Vector Search| pgvector extension |
 |Document Storage|Supabase Storage (S3-compatible API) + boto3 |
-|Document Processing (Text and meta data extraction)| PyMuPDF4LLM|
-|Text Chunking| LangChain `RecursiveCharacterTextSplitter`|
+|Document Processing (Text and meta data extraction)| `pymupdf`|
+|Text Chunking| pymupdf `to_chunks`|
 |Embedding Model| Sentence Transformers (`all-MiniLM-L6-v2`)|
 |LLM Integration| Groq API|
 |Background Job Processing| ARQ|
@@ -111,7 +111,6 @@ The application uses 3 tables:
 |mime_type|String(100)|NOT NULL|File type (eg: application/pdf)|
 |file_size|BigInteger|NOT NULL|File size of the document in bytes|
 |created_at|DateTime|NOT NULL, DEFAULT NOW()|Timezone-aware timestamp when document is uploaded|
-|extracted_text|Text|---|Text extracted from the document|
 |document_status|Enum(DocumentStatus)|NOT NULL|Status of the document in the document processing pipeline|
 
 > - `user_id` is a foreign key referencing `users.id`.
@@ -131,7 +130,7 @@ The application uses 3 tables:
 
 ### 3. `document_chunks`
 
-- This table stores the extracted text and meta data for each chunk of the document's extracted_text.
+- This table stores the extracted text and meta data for each chunk of the document's text
 
 |Column|Type|Constraints|Description|
 |---|---|---|---|

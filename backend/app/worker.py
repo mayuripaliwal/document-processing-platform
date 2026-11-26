@@ -8,8 +8,6 @@ import asyncio
 import sys
 from app.embeddings import load_embedding_model
 import logging
-from langchain_core.documents import Document as LangchainDocument
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.storage import ObjectStorage, IFileStorage, LocalStorage, FILE_STORAGE_DIR
 from typing import BinaryIO
 import boto3
@@ -18,9 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from arq.worker import create_worker
 from contextlib import asynccontextmanager
-import re
 import pymupdf
-import pymupdf4llm
 
 load_dotenv()
 
@@ -80,81 +76,34 @@ async def extract_document_storage_key(document_id:int)->str | None:
         
         return storage_key
 
-def extract_text(file:BinaryIO, ctx)->list[LangchainDocument]:
+async def extract_embeddings(chunks,model):
     """
-    Returns a list of LangchainDocument objects with text and metadata from the given PDF file.
+    - Extracts embeddings from each chunk
+    """
+    #TODO get chunk text from each chunk
+    chunk_texts=[]
+    for chunk in chunks:
+        chunk_texts.append(chunk.text)
+
+    embeddings=await asyncio.to_thread(lambda:list(model.embed(chunk_texts, batch_size=8)))
+    embeddings=[embedding.tolist() for embedding in embeddings]
+
+    return embeddings
+
+def extract_chunks(file:BinaryIO):
+    """
+    Returns chunks of max_size=400 from given file
     """
     file.seek(0)
     pdf_bytes=file.read()
-    documents=[]
-    first_section=None
 
     with pymupdf.open(stream=pdf_bytes, filetype="pdf") as pdf:
-        pages=pymupdf4llm.to_markdown(
-            pdf,
-            page_chunks=True
-        )
+        
+        chunks=pdf.to_chunks(max_tokens=400)
 
-    for index, page in enumerate(pages):
-        text=page["text"]
-        if not text or not text.strip():
-            continue
+    return chunks
 
-        headings=re.findall(
-            r"^#{1,6}\s+(.+)$",
-            text,
-            re.MULTILINE
-        )
-        if headings:
-            first_section=headings[0].strip()
-            first_section=re.sub(r"</?u>","", first_section,flags=re.IGNORECASE)
-
-        documents.append(LangchainDocument(
-            page_content=text,
-            metadata={
-                "page_no":index+1,
-                "section_title":first_section
-            }
-        ))
-
-    return documents
-
-async def save_document_text(document_id:int, extracted_text:str):
-    """
-    - Stores extracted text in documents
-    """
-    async with SessionLocal() as db:
-        await db.execute(update(Document).where(Document.id==document_id, Document.extracted_text.is_(None)).values(extracted_text=extracted_text))
-
-        await db.commit()
-
-def chunk_text(documents:list[LangchainDocument])->list[dict]:
-    """
-    Returns a list of text chunks with maximum chunk size 800
-    """
-    CHUNK_SIZE=800
-
-    CHUNK_OVERLAP=80
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP
-    )
-    
-    chunks=text_splitter.split_documents(documents)
-
-    result=[]
-
-    for chunk in chunks:
-        result.append({
-            "text":chunk.page_content,
-            "page_no":chunk.metadata['page_no'],
-            "section_title":chunk.metadata['section_title']
-        })
-
-    return result
-
-async def save_document_chunk_details(document_id:int,chunks:list[dict], embeddings:list[list[float]]):
+async def save_document_chunk_details(document_id:int,chunks, embeddings:list[list[float]]):
     """
     Stores document chunk details[chunk, embedding] of a given document id in document_chunks
     """
@@ -165,10 +114,10 @@ async def save_document_chunk_details(document_id:int,chunks:list[dict], embeddi
             {
                 "document_id":document_id,
                 "chunk_index":chunk_index,
-                "content":chunk["text"],
+                "content":chunk.text,
                 "embedding":embedding,
-                "page_no":chunk["page_no"],
-                "section_title":chunk["section_title"]
+                "page_no":chunk.metadata.page_start,
+                "section_title":chunk.metadata.section_path[-1] if chunk.metadata.section_path else None
             }
         )
 
@@ -183,7 +132,6 @@ async def save_document_chunk_details(document_id:int,chunks:list[dict], embeddi
 async def process_document(ctx,document_id:int):
     """
     - Extracts document text from the document for a given document_id
-    - Stores the extracted_text in documents table
     - Stores its text chunks in document_chunks table
     """    
     try:
@@ -220,67 +168,30 @@ async def process_document(ctx,document_id:int):
             DocumentStatus.PROCESSING
         )
         
-        # 4. Extract text and metadata from file for each page
+        # 4. Extract text and metadata from file for each chunk
         
         try:
-            extracted_documents=await asyncio.to_thread(extract_text,file, ctx)
+            chunks=await asyncio.to_thread(extract_chunks,file)
         except Exception:
             logger.exception("Failed to extract text for document_id: %s", document_id)
             raise
         finally:
             file.close()
 
-        # 5. Extract text from the extracted_documents
-        
-        extracted_text=[]
-        for document in extracted_documents:
-            extracted_text.append(document.page_content)
-
-        extracted_text="\n\n".join(extracted_text)
-
-        logger.info("Extracted text for document_id: %s", document_id)
-
-        # 6. Save extracted text in DB
+        # 5. Generate embeddings from chunks
         
         try:
-            await save_document_text(document_id, extracted_text)
-        except Exception:
-            logger.exception("Failed to save extracted text for document_id: %s", document_id)
-            raise
-
-        logger.info("Saved extracted text for document_id: %s", document_id)
-
-        # 7. Extract chunks each containing text and metadata from extracted_documents
-        
-        try:
-            chunks=await asyncio.to_thread(chunk_text,extracted_documents)
-        except Exception:
-            logger.exception("Failed to extract chunks for document_id: %s", document_id)
-            raise
-
-        logger.info("Extracted chunks for document_id: %s", document_id)
-
-        model=ctx["embedding_model"]
-
-        # 8. Extract text from each chunk
-        
-        chunk_texts=[]
-        for chunk in chunks:
-            chunk_texts.append(chunk["text"])
-
-        # 9. Generate embeddings for each chunk text
-        
-        try:
-            logger.info("Extracting embeddings for document_id: %s with %s chunks", document_id, len(chunk_texts))
-            embeddings=await asyncio.to_thread(lambda:list(model.embed(chunk_texts, batch_size=8)))
-            embeddings=[embedding.tolist() for embedding in embeddings]
+            logger.info("Extracting embeddings for document_id: %s with %s chunks", document_id, len(chunks))
+            model=ctx["embedding_model"]
+            embeddings=await extract_embeddings(chunks, model)
+            
         except Exception:
             logger.exception("Failed to extract embeddings for document_id: %s", document_id)
             raise
 
         logger.info("Extracted embeddings for document_id: %s", document_id)
 
-        # 10. Save chunks and embeddings in DB
+        # 6. Save chunks and embeddings in DB
         
         try:
             await save_document_chunk_details(document_id,chunks, embeddings)
@@ -288,7 +199,7 @@ async def process_document(ctx,document_id:int):
             logger.exception("Failed to save chunks and embeddings for document_id: %s", document_id)
             raise
 
-        # 11. Update document status to COMPLETED
+        # 7. Update document status to COMPLETED
         
         await updateDocumentStatus(
             document_id,

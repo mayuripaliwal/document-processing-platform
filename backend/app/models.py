@@ -4,6 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from enum import Enum
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import JSONB
 
 class DocumentStatus(Enum):
     """States -'UPLOADED', 'PROCESSING', 'COMPLETED', 'FAILED'
@@ -43,7 +44,7 @@ class User(Base):
 class DocumentChunk(Base):
     """
     Schema for defining a document chunk
-    {`id`, `document_id`, `chunk_index`, `content`, `embedding`, `page_no`, `section_title`}
+    {`id`, `document_id`, `chunk_index`, `content`, `embedding`, `page_no`, `section_title`, `bboxes`}
     """
     __tablename__="document_chunks"
 
@@ -62,3 +63,4 @@ class DocumentChunk(Base):
     embedding:Mapped[list[float]]=mapped_column(Vector(384), nullable=True)
     page_no:Mapped[int]=mapped_column(Integer, nullable=False)
     section_title:Mapped[str]=mapped_column(Text, nullable=True)
+    bboxes:Mapped[list[tuple[int, float, float, float, float]]]=mapped_column(JSONB, nullable=False)

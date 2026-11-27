@@ -2,8 +2,9 @@ import {AUTH_STATUSES} from "./AuthConfig";
 import {useState} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
+import removeMarkdown from 'remove-markdown';
 
-export default function AskDocuments({setAuthStatus, documentId, setPageNumber}){
+export default function AskDocuments({setAuthStatus, documentId, setPageNumber, setSelectedBboxes, pageNumber}){
     const BACKEND_URL=import.meta.env.VITE_BACKEND_URL;
     const MAX_QUERY_LENGTH = 200;
     
@@ -56,13 +57,17 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
             }
         }
         catch(error){
-            console.log(error);
             setSearchError("Unable to connect to the server. Please try again.");
             setAnswer(null);
         }
         finally{
             setLoading(false);
         }
+    }
+
+    function handleClickCitation(page_no, bboxes){
+        if (pageNumber!==page_no) setPageNumber(Number(page_no));
+        setSelectedBboxes(bboxes);
     }
     return (
         <main
@@ -138,16 +143,29 @@ export default function AskDocuments({setAuthStatus, documentId, setPageNumber})
                                 
                                 {part.citations.length>0 &&(
                                     <div>
-                                        {part.citations.map(({page_no, section_title}, index)=>(
-                                            <span>
+                                        {part.citations.map(({page_no, section_title, bboxes, content}, index)=>{
+                                            const preview=removeMarkdown(content);
+                                            return (
                                                 <button
+                                                type="button"
                                                 key={index}
-                                                onClick={()=> setPageNumber(Number(page_no))}
+                                                onClick={()=>handleClickCitation(page_no,bboxes)}
                                                 className="text-sm rounded-lg bg-blue-100 m-1 p-1 hover:bg-blue-200"
-                                                >Page: {page_no} ⋅ <ReactMarkdown remarkPlugins={[remarkGfm]} components={{p: ({children})=><span>{children}</span>}}>{section_title}</ReactMarkdown>
+                                                >
+                                                    <p
+                                                    className="font-semibold text-left m-2"
+                                                    >
+                                                        Page: {page_no} ⋅ {removeMarkdown(section_title)}
+                                                    </p>
+                                                    <p
+                                                    className="text-sm text-gray-500 text-left m-2"
+                                                    >
+                                                        {preview.length>100?preview.slice(0, 100)+"...":preview}
+                                                    </p>
+                                                
                                                 </button>
-                                            </span>
-                                        ))}
+                                            )
+                                            })}
                                     </div>
                                 )}
                                 </div>

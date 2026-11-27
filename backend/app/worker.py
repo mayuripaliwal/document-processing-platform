@@ -80,7 +80,6 @@ async def extract_embeddings(chunks,model):
     """
     - Extracts embeddings from each chunk
     """
-    #TODO get chunk text from each chunk
     chunk_texts=[]
     for chunk in chunks:
         chunk_texts.append(chunk.text)
@@ -117,7 +116,8 @@ async def save_document_chunk_details(document_id:int,chunks, embeddings:list[li
                 "content":chunk.text,
                 "embedding":embedding,
                 "page_no":chunk.metadata.page_start,
-                "section_title":chunk.metadata.section_path[-1] if chunk.metadata.section_path else None
+                "section_title":chunk.metadata.section_path[-1] if chunk.metadata.section_path else None,
+                "bboxes":chunk.metadata.bboxes
             }
         )
 

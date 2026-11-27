@@ -12,7 +12,7 @@ A full-stack application for uploading, searching, and querying PDF documents.
 https://github.com/user-attachments/assets/84c2a3ca-e0c9-444e-b183-75dc13ac7d64
 
 ### 1. Ask Documents
-![Ask Documents](/frontend/public/Ask_Documents_Demo_Screenshot.png)
+![Ask Documents](/frontend/public/Ask_Documents_Screenshot.png)
 
 ### 2. My Documents
 ![My Documents](/frontend/public/My_Documents_Demo_Screenshot.png)
@@ -50,7 +50,7 @@ flowchart LR
 |Vector Search| pgvector extension |
 |Document Storage|Supabase Storage (S3-compatible API) + boto3 |
 |Document Processing (Text and meta data extraction)| `pymupdf`|
-|Text Chunking| pymupdf `to_chunks`|
+|Text Chunking| Layout-based chunking (pymupdf `to_chunks`)|
 |Embedding Model| Sentence Transformers (`all-MiniLM-L6-v2`)|
 |LLM Integration| Groq API|
 |Background Job Processing| ARQ|
@@ -65,6 +65,7 @@ flowchart LR
 - Track document processing through `UPLOADED`, `PROCESSING`, `COMPLETED`, and `FAILED` states.
 - Ask questions about PDF documents using AI-powered question-answering.
 - Get answers with validated source citations and navigate directly to the corresponding pages in the PDF viewer.
+- Click on a citation to highlight it in the PDF viewer
 
 > Note: Citation validation ensures that citations returned by the LLM correspond to chunks actually retrieved from the document. It does not guarantee that those chunks directly support the generated answer.
 
@@ -141,6 +142,7 @@ The application uses 3 tables:
 |embedding|Vector(384)|---|Vector embedding of the extracted text|
 |page_no|Integer|NOT NULL|Page number on which the chunk exists in the document|
 |section_title|Text|---|Section title of the chunk|
+|bboxes|JSONB|NOT NULL|Stores bounding box coordinates of the chunk for locating chunk text in the PDF viewer|
 
 > - `document_id` is a foreign key referencing `documents.id`.
 > - When a document record is deleted, all the chunks referencing that `document_id` are deleted as well (ON DELETE CASCADE).

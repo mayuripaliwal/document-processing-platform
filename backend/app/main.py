@@ -486,7 +486,6 @@ async def search_documents(request:Request,document_id:int, query:str=Query(min_
     return answer
 
 @app.get('/documents/{document_id}/file',status_code=status.HTTP_200_OK)
-#TODO: add a test for this API
 async def getDocumentFile(document_id: int, user_id:int=Depends(get_user),db=Depends(get_db)):
     """
     - Fetches document object for a given document id and user_id.
@@ -750,7 +749,8 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
             dc.id as chunk_id,
             dc.content,
             dc.page_no,
-            dc.section_title
+            dc.section_title,
+            dc.bboxes
 
             FROM semantic_chunks sc
             FULL OUTER JOIN text_chunks tc
@@ -779,20 +779,18 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
 
     search_results_for_llm=[]
 
-    source_id_to_page_no_mapping={}
-    source_id_to_section_title_mapping={}
+    source_id_to_result_index_mapping={}
 
     actual_sources=set()
 
-    for chunk_id, content, page_no, section_title in result:
+    for index, (chunk_id, content, page_no, section_title,bboxes) in enumerate(result):
         search_results_for_llm.append({
             "source_id":chunk_id,
             "section_title":section_title,
             "content":content,
         })
         actual_sources.add(chunk_id)
-        source_id_to_page_no_mapping[chunk_id]=page_no
-        source_id_to_section_title_mapping[chunk_id]=section_title
+        source_id_to_result_index_mapping[chunk_id]=index
 
     answer_parts=await generate_answer(query, search_results_for_llm, groq_client)
 
@@ -803,11 +801,14 @@ async def getSearchAnswer(groq_client, query:str, user_id:int, document_id:int, 
 
     for answer in answer_parts:
         meta_data=[]
+        answer["citations"].sort()
         for source_id in answer["citations"]:
             if source_id in actual_sources:
                 meta_data.append({
-                    "page_no":source_id_to_page_no_mapping[source_id],
-                    "section_title":source_id_to_section_title_mapping[source_id]
+                    "page_no":result[source_id_to_result_index_mapping[source_id]][2],
+                    "section_title":result[source_id_to_result_index_mapping[source_id]][3],
+                    "bboxes":result[source_id_to_result_index_mapping[source_id]][4],
+                    "content":result[source_id_to_result_index_mapping[source_id]][1]
                 })
             else:
                 logger.info("LLM returned an unknown chunk citation: %s", source_id)

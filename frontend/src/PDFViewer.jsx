@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef} from "react";
+import {useState, useEffect, useRef, useMemo} from "react";
 import {Document, Page, pdfjs} from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -8,13 +8,22 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     import.meta.url
 ).toString()
 
-export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
+export default function PDFViewer({fileUrl, setPageNumber, pageNumber, selectedBboxes}){
     const [numPages, setNumPages]=useState(null);
     const [goToPage, setGoToPage]=useState(1);
     const [loadError, setLoadError]=useState("");
+
+    const pageRef=useRef(null);
+
+    const file=useMemo(()=>({
+        url:fileUrl,
+        withCredentials:true
+    }),[fileUrl]);
+
     useEffect(()=>{
         setGoToPage(String(pageNumber))
     },[pageNumber]);
+
     return (
         <>
         <div 
@@ -22,9 +31,7 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
         >
             
             <Document
-            file={{url:fileUrl,
-                withCredentials:true
-            }}
+            file={file}
             onLoadSuccess={({numPages})=>setNumPages(numPages)}
             onLoadError={(error)=>{
                 setLoadError(error.status);
@@ -86,9 +93,37 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber}){
                         Next
                     </button>
                 </div>
-                <Page 
-                pageNumber={pageNumber}
-                ></Page>
+                <div
+                className="relative inline-block"
+                ref={pageRef}
+                >
+                    <Page 
+                    pageNumber={pageNumber}
+                    ></Page>
+                    {selectedBboxes.map((bbox, index)=>{
+                        
+                        const [page, x0, y0, x1, y1] = bbox;
+                        if (page!==pageNumber) return;
+                        const top=y0;
+                        const left=x0;
+                        const height=y1-y0;
+                        const width=x1-x0;
+                        return (
+                            <div
+                            key={index}
+                            className="absolute bg-yellow-300/40"
+                            style={{
+                                top:`${top}px`,
+                                left:`${left}px`,
+                                width:`${width}px`,
+                                height:`${height}px`
+                            }}
+                            >
+                            </div>
+                        );                        
+                    })}
+                    
+                </div>
                 
             </Document>
         </div>

@@ -168,7 +168,7 @@ export default function LandingPage() {
               {/**Demo Screenshot */}
               <img
                 alt="App screenshot"
-                src="/QueryPDF_Demo_Screenshot.png"
+                src="/Ask_Documents_Screenshot.png"
                 width={2432}
                 height={1442}
                 className="h-auto w-full rounded-xl shadow-xl ring-1 ring-gray-900/10"

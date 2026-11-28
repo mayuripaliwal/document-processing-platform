@@ -14,8 +14,8 @@ const features = [
     description: "Ask questions about your uploaded PDFs and get contextual answers based on their content."
   },
   {
-    title: "Source Citations",
-    description: "Verify answers with source citations. Click a citation to jump directly to the corresponding page in your PDF."
+    title: "Find Answers in Your PDF",
+    description: "Click a citation to navigate to the relevant PDF page, and QueryPDF will automatically highlight the corresponding content."
   },
   {
     title: "PDF Uploads & Management",
@@ -158,7 +158,7 @@ export default function LandingPage() {
                   </Link>
                   <a
                     href="#demo"
-                    className="relative z-10 rounded-md bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    className="relative z-10 rounded-md border border-gray-900 px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-xs hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                   >
                     Watch Demo
                   </a>
@@ -199,13 +199,13 @@ export default function LandingPage() {
               className="h-auto w-full"
               poster="/QueryPDF_Demo_Screenshot.png"
             >
-              <source src="/QueryPDF_Demo_Video.mp4" type="video/mp4" />
+              <source src="/QueryPDF_Video_Demo.mp4" type="video/mp4" />
               Your browser does not support the video element.
             </video>
           </div>
 
           <p className="mt-4 text-center text-sm text-gray-500">
-            23-second demonstration using a <a
+            20-second demonstration using a <a
             href="https://s22.q4cdn.com/513010314/files/doc_financials/2022/q4/r/MGM-Resorts-Exhibit-99.1.pdf"
             className="underline text-blue-600"
             target="_blank"

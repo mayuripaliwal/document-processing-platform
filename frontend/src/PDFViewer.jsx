@@ -13,6 +13,8 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber, selectedB
     const [goToPage, setGoToPage]=useState(1);
     const [loadError, setLoadError]=useState("");
 
+    const [pageRendered, setPageRendered]=useState(false);
+
     const pageRef=useRef(null);
 
     const file=useMemo(()=>({
@@ -22,6 +24,10 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber, selectedB
 
     useEffect(()=>{
         setGoToPage(String(pageNumber))
+    },[pageNumber]);
+
+    useEffect(()=> {
+        setPageRendered(false);
     },[pageNumber]);
 
     return (
@@ -99,8 +105,9 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber, selectedB
                 >
                     <Page 
                     pageNumber={pageNumber}
+                    onRenderSuccess={()=>setPageRendered(true)}
                     ></Page>
-                    {selectedBboxes.map((bbox, index)=>{
+                    {pageRendered && selectedBboxes.map((bbox, index)=>{
                         
                         const [page, x0, y0, x1, y1] = bbox;
                         if (page!==pageNumber) return;
@@ -111,7 +118,7 @@ export default function PDFViewer({fileUrl, setPageNumber, pageNumber, selectedB
                         return (
                             <div
                             key={index}
-                            className="absolute bg-yellow-300/40"
+                            className="absolute bg-yellow-300/40 pointer-events-none"
                             style={{
                                 top:`${top}px`,
                                 left:`${left}px`,

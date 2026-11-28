@@ -57,6 +57,7 @@ flowchart LR
 |Cache| Redis|
 |Authentication| JWT, Argon2|
 |Testing| pytest|
+|Deployment|Frontend-Vercel, Backend and Worker-Render, Database-Neon, Object Storage-Supabase, Redis-Upstash|
 
 > Note: Document Storage supports both `ObjectStorage` as well as `LocalStorage` through the `IFileStorage` abstraction. Currently, `ObjectStorage` is used, implemented using boto3 and Supabase storage's S3 compatible API. `LocalStorage` is kept as an option for local testing.
 

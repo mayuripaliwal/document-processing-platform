@@ -197,7 +197,7 @@ export default function LandingPage() {
               preload="metadata"
               playsInline
               className="h-auto w-full"
-              poster="/QueryPDF_Demo_Screenshot.png"
+              poster="/Ask_Documents_Screenshot.png"
             >
               <source src="/QueryPDF_Video_Demo.mp4" type="video/mp4" />
               Your browser does not support the video element.

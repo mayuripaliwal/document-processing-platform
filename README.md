@@ -1,5 +1,6 @@
 # Document Processing Platform
 [![CI](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/mayuripaliwal/document-processing-platform/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/mayuripaliwal/document-processing-platform/branch/main/graph/badge.svg)](https://codecov.io/gh/mayuripaliwal/document-processing-platform)
 ![GitHub License](https://img.shields.io/github/license/mayuripaliwal/document-processing-platform)
 
 A full-stack application for uploading, searching, and querying PDF documents.
